@@ -144,6 +144,89 @@ function invoice_format_order_info_address_html(array $orderInfo, string $type, 
 }
 
 /**
+ * Multi-line billing/shipping address for invoice create UI (not PDF-wrapped).
+ *
+ * @param array<string, mixed> $orderInfo
+ */
+function invoice_format_order_info_address_display_html(array $orderInfo, string $type = 'billing', $conn = null): string
+{
+    $isShipping = $type === 'shipping';
+    $prefix = $isShipping ? 'shipping_' : '';
+
+    $firstName = trim((string) ($orderInfo[$prefix . 'first_name'] ?? ''));
+    $lastName = trim((string) ($orderInfo[$prefix . 'last_name'] ?? ''));
+    if ($firstName === '' && $lastName === '') {
+        $firstName = trim((string) ($orderInfo['first_name'] ?? ''));
+        $lastName = trim((string) ($orderInfo['last_name'] ?? ''));
+    }
+    $name = trim($firstName . ' ' . $lastName);
+    $company = trim((string) ($orderInfo[$prefix . 'company'] ?? $orderInfo['company'] ?? ''));
+    $line1 = trim((string) ($orderInfo[$prefix . 'address_line1'] ?? ''));
+    $line2 = trim((string) ($orderInfo[$prefix . 'address_line2'] ?? ''));
+    $city = trim((string) ($orderInfo[$prefix . 'city'] ?? ''));
+    $state = trim((string) ($orderInfo[$prefix . 'state'] ?? ''));
+    $zip = trim((string) ($orderInfo[$prefix . 'zipcode'] ?? ''));
+    $country = trim((string) ($orderInfo[$prefix . 'country'] ?? ''));
+    if ($isShipping && $country === '') {
+        $country = trim((string) ($orderInfo['country'] ?? ''));
+    }
+    $phone = trim((string) ($orderInfo[$prefix . 'mobile'] ?? ''));
+    if ($phone === '') {
+        $phone = trim((string) ($orderInfo[$prefix . 'phone'] ?? ''));
+    }
+    if ($isShipping && $phone === '') {
+        $phone = trim((string) ($orderInfo['mobile'] ?? $orderInfo['phone'] ?? ''));
+    }
+    $email = trim((string) ($orderInfo[$prefix . 'email'] ?? ''));
+    if ($email === '' && !$isShipping) {
+        $email = trim((string) ($orderInfo['email'] ?? ''));
+    }
+
+    $lines = [];
+    if ($name !== '') {
+        $lines[] = '<strong>' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '</strong>';
+    }
+    if ($company !== '') {
+        $lines[] = htmlspecialchars($company, ENT_QUOTES, 'UTF-8');
+    }
+    $street = trim($line1 . ($line2 !== '' ? ', ' . $line2 : ''));
+    if ($street !== '') {
+        $lines[] = htmlspecialchars($street, ENT_QUOTES, 'UTF-8');
+    }
+    $cityLine = array_values(array_filter([$city, $state, $zip], static function ($part) {
+        return trim((string) $part) !== '';
+    }));
+    if ($cityLine !== []) {
+        $lines[] = htmlspecialchars(implode(', ', $cityLine), ENT_QUOTES, 'UTF-8');
+    }
+    if ($country !== '') {
+        $lines[] = htmlspecialchars($country, ENT_QUOTES, 'UTF-8');
+    }
+    if (!$isShipping) {
+        $gstStateCode = invoice_resolve_billing_gst_state_code($orderInfo, $conn);
+        if ($gstStateCode !== '') {
+            $lines[] = 'State Code: ' . htmlspecialchars($gstStateCode, ENT_QUOTES, 'UTF-8');
+        }
+        $gstin = trim((string) ($orderInfo['gstin'] ?? ''));
+        if ($gstin !== '') {
+            $lines[] = 'GSTIN: ' . htmlspecialchars($gstin, ENT_QUOTES, 'UTF-8');
+        }
+    }
+    if ($phone !== '') {
+        $lines[] = 'Tel: ' . htmlspecialchars($phone, ENT_QUOTES, 'UTF-8');
+    }
+    if ($email !== '') {
+        $lines[] = 'Email: ' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8');
+    }
+
+    if ($lines === []) {
+        return '';
+    }
+
+    return implode('<br>', $lines);
+}
+
+/**
  * Place of supply state for Ship To block (shipping state when present, else billing state).
  */
 function invoice_resolve_place_of_supply_display_state(array $orderInfo): string

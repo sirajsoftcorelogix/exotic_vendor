@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../helpers/invoice/invoice_address_html.php';
 $is_international = false;
 $invoiceCurrency = $data[0]['currency'] ?? 'INR';
 if (!empty($invoiceCurrency) && $invoiceCurrency !== 'INR') {
@@ -44,7 +45,10 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                         <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700"><?php echo htmlspecialchars((string) $invoiceCurrency, ENT_QUOTES, 'UTF-8'); ?></span>
                         <span class="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-800"><?php echo (int) $invoiceItemCount; ?> item<?php echo $invoiceItemCount === 1 ? '' : 's'; ?></span>
                         <?php foreach ($invoiceOrderNumbers as $orderNo): ?>
-                            <span class="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-200">Order <?php echo htmlspecialchars($orderNo, ENT_QUOTES, 'UTF-8'); ?></span>
+                            <a href="<?php echo htmlspecialchars(base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . rawurlencode($orderNo)), ENT_QUOTES, 'UTF-8'); ?>"
+                               target="_blank" rel="noopener noreferrer"
+                               class="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-medium text-orange-800 ring-1 ring-orange-200 hover:bg-orange-50 hover:underline"
+                               title="View order details">Order <?php echo htmlspecialchars($orderNo, ENT_QUOTES, 'UTF-8'); ?></a>
                         <?php endforeach; ?>
                     </div>
                 </div>
@@ -78,13 +82,60 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 <div class="mb-5">
                     <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Shipment route</h3>
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <?php
+                $shippingPorts = is_array($shipping_ports ?? null) ? $shipping_ports : [];
+                $shippingPortTypes = is_array($shipping_port_types ?? null) ? $shipping_port_types : [];
+                $selectedPreCarriage = (string) ($intl['pre_carriage_by'] ?? 'Air');
+                $selectedLoading = (string) ($intl['port_of_loading'] ?? '');
+                $selectedShippingPort = strtoupper((string) ($intl['shipping_port'] ?? ''));
+                $preCarriageValues = class_exists('PortMaster') ? PortMaster::preCarriageValues() : [];
+                ?>
                 <div>
                     <label for="pre_carriage_by" class="<?php echo $invLabelClass; ?>">Pre Carriage By</label>
-                    <input type="text" name="pre_carriage_by" id="pre_carriage_by" value="<?php echo $intlVal('pre_carriage_by'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                    <?php if ($shippingPortTypes !== []): ?>
+                        <select name="pre_carriage_by" id="pre_carriage_by" class="<?php echo $invInputClass; ?> inv-input">
+                            <?php foreach ($shippingPortTypes as $typeKey => $typeLabel): ?>
+                                <?php
+                                $preValue = $preCarriageValues[$typeKey] ?? $typeLabel;
+                                $preSelected = strcasecmp($selectedPreCarriage, (string) $preValue) === 0
+                                    || strcasecmp($selectedPreCarriage, (string) $typeLabel) === 0
+                                    || strcasecmp($selectedPreCarriage, (string) $typeKey) === 0;
+                                ?>
+                                <option value="<?php echo htmlspecialchars((string) $preValue, ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-port-type="<?php echo htmlspecialchars((string) $typeKey, ENT_QUOTES, 'UTF-8'); ?>"
+                                    <?php echo $preSelected ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars((string) $typeLabel, ENT_QUOTES, 'UTF-8'); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    <?php else: ?>
+                        <input type="text" name="pre_carriage_by" id="pre_carriage_by" value="<?php echo $intlVal('pre_carriage_by'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                    <?php endif; ?>
                 </div>
                 <div>
                     <label for="port_of_loading" class="<?php echo $invLabelClass; ?>">Port of Loading</label>
-                    <input type="text" name="port_of_loading" id="port_of_loading" value="<?php echo $intlVal('port_of_loading'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                    <?php if ($shippingPorts !== []): ?>
+                        <select name="port_of_loading" id="port_of_loading" class="<?php echo $invInputClass; ?> inv-input">
+                            <option value="">Select port of loading</option>
+                            <?php foreach ($shippingPorts as $portRow): ?>
+                                <?php
+                                $portOption = PortMaster::formatPortOption($portRow);
+                                $portCode = strtoupper(trim((string) ($portRow['port_code'] ?? '')));
+                                $portType = (string) ($portRow['port_type'] ?? '');
+                                $isSelected = $portOption === $selectedLoading
+                                    || ($portCode !== '' && $portCode === $selectedShippingPort);
+                                ?>
+                                <option value="<?php echo htmlspecialchars($portOption, ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-port-code="<?php echo htmlspecialchars($portCode, ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-port-type="<?php echo htmlspecialchars($portType, ENT_QUOTES, 'UTF-8'); ?>"
+                                    <?php echo $isSelected ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($portOption, ENT_QUOTES, 'UTF-8'); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    <?php else: ?>
+                        <input type="text" name="port_of_loading" id="port_of_loading" value="<?php echo $intlVal('port_of_loading'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                    <?php endif; ?>
                 </div>
                 <div>
                     <label for="port_of_discharge" class="<?php echo $invLabelClass; ?>">Port of Discharge</label>
@@ -92,11 +143,40 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 </div>
                 <div>
                     <label for="country_of_origin" class="<?php echo $invLabelClass; ?>">Country of Origin</label>
-                    <input type="text" name="country_of_origin" id="country_of_origin" value="<?php echo $intlVal('country_of_origin'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                    <input type="text" name="country_of_origin" id="country_of_origin" value="India" readonly class="<?php echo $invInputClass; ?> inv-input bg-gray-100 text-gray-700">
                 </div>
                 <div>
                     <label for="country_of_final_destination" class="<?php echo $invLabelClass; ?>">Country of Final Destination</label>
-                    <input type="text" name="country_of_final_destination" id="country_of_final_destination" value="<?php echo $intlVal('country_of_final_destination'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                    <?php
+                    $invoiceCountries = is_array($invoice_countries ?? null) ? $invoice_countries : [];
+                    $selectedDestCountry = (string) ($intl['country_of_final_destination'] ?? '');
+                    $selectedDestCode = strtoupper((string) ($intl['shipping_country_code'] ?? ''));
+                    ?>
+                    <?php if ($invoiceCountries !== []): ?>
+                        <select name="country_of_final_destination" id="country_of_final_destination" class="<?php echo $invInputClass; ?> inv-input">
+                            <option value="">Select country</option>
+                            <?php foreach ($invoiceCountries as $countryRow): ?>
+                                <?php
+                                $countryName = trim((string) ($countryRow['name'] ?? ''));
+                                $countryCode = strtoupper(trim((string) ($countryRow['country_code'] ?? '')));
+                                if ($countryName === '') {
+                                    continue;
+                                }
+                                $countrySelected = strcasecmp($selectedDestCountry, $countryName) === 0
+                                    || ($countryCode !== '' && $countryCode === $selectedDestCode)
+                                    || ($countryCode !== '' && strcasecmp($selectedDestCountry, $countryCode) === 0);
+                                $countryLabel = $countryCode !== '' ? $countryName . ' (' . $countryCode . ')' : $countryName;
+                                ?>
+                                <option value="<?php echo htmlspecialchars($countryName, ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-country-code="<?php echo htmlspecialchars($countryCode, ENT_QUOTES, 'UTF-8'); ?>"
+                                    <?php echo $countrySelected ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($countryLabel, ENT_QUOTES, 'UTF-8'); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    <?php else: ?>
+                        <input type="text" name="country_of_final_destination" id="country_of_final_destination" value="<?php echo $intlVal('country_of_final_destination'); ?>" class="<?php echo $invInputClass; ?> inv-input">
+                    <?php endif; ?>
                 </div>
                 <div>
                     <label for="final_destination" class="<?php echo $invLabelClass; ?>">Final Destination</label>
@@ -162,18 +242,18 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         <!-- Transporter & Vehicle Information -->
         <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0px_10px_15px_-3px_#0000001A] md:p-6" id="transportSelectionSection">
             <h2 class="mb-1 text-base font-semibold text-slate-800">Transporter &amp; vehicle</h2>
-            <p class="mb-4 text-sm text-gray-500">Choose transport mode or a registered transporter ID for e-way bill details.</p>
+            <p class="mb-4 text-sm text-gray-500">Choose a registered transporter ID or transport mode for e-way bill details.</p>
             <div class="mb-4 inline-flex rounded-lg bg-gray-100 p-1 text-sm">
                 <label class="inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 has-[:checked]:bg-white has-[:checked]:font-semibold has-[:checked]:shadow-sm">
-                    <input type="radio" name="transport_selection" value="mode" checked class="h-4 w-4 text-orange-600" data-transport-selection>
-                    <span>Transport Mode</span>
-                </label>
-                <label class="inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 has-[:checked]:bg-white has-[:checked]:font-semibold has-[:checked]:shadow-sm">
-                    <input type="radio" name="transport_selection" value="id" class="h-4 w-4 text-orange-600" data-transport-selection>
+                    <input type="radio" name="transport_selection" value="id" checked class="h-4 w-4 text-orange-600" data-transport-selection>
                     <span>Transport ID</span>
                 </label>
+                <label class="inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-1.5 has-[:checked]:bg-white has-[:checked]:font-semibold has-[:checked]:shadow-sm">
+                    <input type="radio" name="transport_selection" value="mode" class="h-4 w-4 text-orange-600" data-transport-selection>
+                    <span>Transport Mode</span>
+                </label>
             </div>
-            <div id="transportModeFields" class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
+            <div id="transportModeFields" class="hidden grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
                 <div>
                     <label for="invoice_trans_mode" class="<?php echo $invLabelClass; ?>">Transport Mode</label>
                     <select name="trans_mode" id="invoice_trans_mode" class="<?php echo $invInputClass; ?> inv-input">
@@ -203,7 +283,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                     <input type="text" name="trans_doc_dt" id="invoice_trans_doc_dt" value="<?= date('d/m/Y') ?>" class="<?php echo $invInputClass; ?> inv-input">
                 </div>
             </div>
-            <div id="transportIdFields" class="hidden grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div id="transportIdFields" class="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                     <label for="invoice_transporter_id" class="<?php echo $invLabelClass; ?>">Transport ID</label>
                     <select name="trans_id" id="invoice_transporter_id" class="<?php echo $invInputClass; ?> inv-input">
@@ -286,11 +366,32 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
 
                 $defaultBillTo = !empty($billToAddresses) ? $billToAddresses[0] : '';
                 $defaultShipTo = !empty($shipToAddresses) ? $shipToAddresses[0] : '';
+                $invoiceAddressConn = $GLOBALS['conn'] ?? null;
+                $firstBillAddr = (isset($customer_address) && is_array($customer_address))
+                    ? (reset($customer_address) ?: null)
+                    : null;
+                $defaultBillToHtml = is_array($firstBillAddr)
+                    ? invoice_format_order_info_address_display_html($firstBillAddr, 'billing', $invoiceAddressConn)
+                    : '';
+                $defaultShipToHtml = '';
+                if (is_array($firstBillAddr)) {
+                    $defaultShipToHtml = invoice_format_order_info_address_display_html($firstBillAddr, 'shipping', $invoiceAddressConn);
+                    if ($defaultShipToHtml === '') {
+                        $defaultShipToHtml = $defaultBillToHtml;
+                    }
+                }
+                if ($defaultBillToHtml === '' && $defaultBillTo !== '') {
+                    $defaultBillToHtml = htmlspecialchars($defaultBillTo, ENT_QUOTES, 'UTF-8');
+                }
+                if ($defaultShipToHtml === '' && $defaultShipTo !== '') {
+                    $defaultShipToHtml = htmlspecialchars($defaultShipTo, ENT_QUOTES, 'UTF-8');
+                }
                 $showGSTContainer = isset($customer_address[0]['country']) && strtolower($customer_address[0]['country']) !== 'in';
                 $addr0 = (isset($customer_address) && is_array($customer_address) && isset($customer_address[0]) && is_array($customer_address[0]))
                     ? $customer_address[0]
                     : null;
                 $gstin = $addr0 !== null ? trim((string)($addr0['gstin'] ?? '')) : '';
+                $showSupplyState = !$is_international && trim((string) $billingState) !== '';
                 ?>
 
         <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -310,18 +411,22 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 <input type="hidden" name="vp_order_info_id" id="vp_order_info_id" value="<?= htmlspecialchars((string) ($customer_address[0]['id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" id="billToDisplay" value="<?= htmlspecialchars($defaultBillTo) ?>">
                 <p id="billToText" class="rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-700"><?= htmlspecialchars($defaultBillTo) !== '' ? htmlspecialchars($defaultBillTo) : 'No billing address found' ?></p>
+                <?php if ($showSupplyState || $showGSTContainer): ?>
                 <div class="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                    <?php if ($showSupplyState): ?>
                     <div id="supplystate" class="inline-flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-slate-700">
                         <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">Supply state</span>
                         <span><?= htmlspecialchars((string) $billingState, ENT_QUOTES, 'UTF-8') ?></span>
                     </div>
+                    <?php endif; ?>
                     <?php if ($showGSTContainer): ?>
                         <label id="applyGSTContainer" class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5">
-                            <input type="checkbox" id="applyGST" name="applyGST" value="1" checked class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
+                            <input type="checkbox" id="applyGST" name="applyGST" value="1" class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
                             <span class="text-sm font-medium text-gray-700">Apply GST</span>
                         </label>
                     <?php endif; ?>
                 </div>
+                <?php endif; ?>
             </div>
 
             <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0px_10px_15px_-3px_#0000001A] md:p-6">
@@ -345,7 +450,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 </div>
                 <div>
                     <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Ship To</div>
-                    <p class="rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-700" id="shipToDisplay"><?= htmlspecialchars($defaultShipTo) !== '' ? htmlspecialchars($defaultShipTo) : 'Same as billing address' ?></p>
+                    <p class="rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-700" id="shipToDisplay"><?= $defaultShipToHtml !== '' ? $defaultShipToHtml : 'Same as billing address' ?></p>
                     <input type="hidden" id="shipToDisplayValue" value="<?= htmlspecialchars($defaultShipTo) ?>">
                 </div>
             </div>
@@ -422,15 +527,28 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                             $itemImage = trim((string) ($item['image'] ?? ''));
                     ?>
                             <tr class="bg-gray-50">
-                                <input type="hidden" name="order_number[]" value="<?= htmlspecialchars((string) $item['order_number'], ENT_QUOTES, 'UTF-8') ?>">
-                                <input type="hidden" name="item_code[]" value="<?= htmlspecialchars((string) $item['item_code'], ENT_QUOTES, 'UTF-8') ?>">
-                                <input type="hidden" name="gst[]" value="<?= htmlspecialchars((string) $item['gst'], ENT_QUOTES, 'UTF-8') ?>">
-                                <input type="hidden" name="tax_rate[]" value="<?= htmlspecialchars((string) $item['gst'], ENT_QUOTES, 'UTF-8') ?>">
-                                <input type="hidden" name="currency[]" value="<?php echo htmlspecialchars((string) ($item['currency'] ?? 'INR'), ENT_QUOTES, 'UTF-8'); ?>">
-                                <input type="hidden" name="image_url[]" value="<?= htmlspecialchars((string) ($item['image'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                                <input type="hidden" name="groupname[]" value="<?= htmlspecialchars((string) ($item['groupname'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                                <td class="rounded-l-xl px-3 py-3 font-medium text-gray-500"><?php echo $index + 1; ?></td>
-                                <td class="px-3 py-3 font-medium text-slate-800"><span><?= htmlspecialchars((string) $item['sku'], ENT_QUOTES, 'UTF-8') ?></span></td>
+                                <td class="rounded-l-xl px-3 py-3 font-medium text-gray-500">
+                                    <input type="hidden" name="order_number[]" value="<?= htmlspecialchars((string) $item['order_number'], ENT_QUOTES, 'UTF-8') ?>">
+                                    <input type="hidden" name="item_code[]" value="<?= htmlspecialchars((string) $item['item_code'], ENT_QUOTES, 'UTF-8') ?>">
+                                    <input type="hidden" name="gst[]" value="<?= htmlspecialchars((string) $item['gst'], ENT_QUOTES, 'UTF-8') ?>">
+                                    <input type="hidden" name="tax_rate[]" value="<?= htmlspecialchars((string) $item['gst'], ENT_QUOTES, 'UTF-8') ?>">
+                                    <input type="hidden" name="currency[]" value="<?php echo htmlspecialchars((string) ($item['currency'] ?? 'INR'), ENT_QUOTES, 'UTF-8'); ?>">
+                                    <input type="hidden" name="image_url[]" value="<?= htmlspecialchars((string) ($item['image'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                    <input type="hidden" name="groupname[]" value="<?= htmlspecialchars((string) ($item['groupname'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                    <?php echo $index + 1; ?>
+                                </td>
+                                <td class="px-3 py-3 font-medium text-slate-800">
+                                    <span><?= htmlspecialchars((string) $item['sku'], ENT_QUOTES, 'UTF-8') ?></span>
+                                    <?php
+                                    $lineOrderNo = trim((string) ($item['order_number'] ?? ''));
+                                    if ($lineOrderNo !== ''):
+                                        $lineOrderUrl = base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . rawurlencode($lineOrderNo));
+                                    ?>
+                                        <div class="mt-1">
+                                            <a href="<?= htmlspecialchars($lineOrderUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-orange-700 hover:underline" title="View order details"><?= htmlspecialchars($lineOrderNo, ENT_QUOTES, 'UTF-8') ?></a>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="px-3 py-3" colspan="2">
                                     <div class="flex items-start gap-3">
                                         <?php if ($itemImage !== ''): ?>
@@ -568,7 +686,26 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
     </div>
 </div>
 <script>
-    // Helper function to round to 2 decimal places
+    const invoiceOrderDetailsUrlBase = <?php echo json_encode(base_url('?page=orders&action=get_order_details_html&type=outer&order_number=')); ?>;
+
+    function invoiceOrderDetailsUrl(orderNumber) {
+        const orderNo = String(orderNumber || '').trim();
+        if (!orderNo) {
+            return '';
+        }
+        return invoiceOrderDetailsUrlBase + encodeURIComponent(orderNo);
+    }
+
+    function invoiceOrderDetailsLink(orderNumber) {
+        const orderNo = String(orderNumber || '').trim();
+        const url = invoiceOrderDetailsUrl(orderNo);
+        if (!orderNo || !url) {
+            return '';
+        }
+        const safeNo = String(orderNo).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-orange-700 hover:underline" title="View order details" onclick="event.stopPropagation()">${safeNo}</a>`;
+    }
+
     function roundToTwo(num) {
         return Math.round(num * 100) / 100;
     }
@@ -578,6 +715,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
 
     // Store address data for modal
     const addressData = <?php echo json_encode(array_map(function ($addr) {
+                            $invoiceAddressConn = $GLOBALS['conn'] ?? null;
                             $billParts = [];
                             if (!empty($addr['first_name'])) $billParts[] = $addr['first_name'] . ' ' . $addr['last_name'];
                             if (!empty($addr['address_line1'])) $billParts[] = $addr['address_line1'];
@@ -599,22 +737,39 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                                 if (!empty($addr['shipping_country'])) $shipParts[] = $addr['shipping_country'];
                             }
                             $shipAddr = implode(', ', $shipParts);
+                            $billHtml = invoice_format_order_info_address_display_html($addr, 'billing', $invoiceAddressConn);
+                            $shipHtml = invoice_format_order_info_address_display_html($addr, 'shipping', $invoiceAddressConn);
+                            if ($shipHtml === '') {
+                                $shipHtml = $billHtml;
+                            }
 
                             return [
                                 'id' => $addr['id'],
                                 'order_number' => $addr['order_number'] ?? '',
                                 'bill_to' => $billAddr,
                                 'ship_to' => $shipAddr,
+                                'bill_html' => $billHtml,
+                                'ship_html' => $shipHtml,
                                 'state' => $addr['state'] ?? ''
                             ];
                         }, $customer_address)) ?>;
 
     // Function to determine tax type based on states
-    function calculateGSTType(billingState) {
-        if (!billingState || !firmState) return null;
+    const invoiceIsInternational = <?php echo !empty($is_international) ? 'true' : 'false'; ?>;
+    let currentBillingState = <?php echo json_encode((string) $billingState, JSON_UNESCAPED_UNICODE); ?>;
 
-        // Same state = CGST + SGST, Different state = IGST
-        return (billingState.trim().toUpperCase() === firmState.trim().toUpperCase()) ? 'same' : 'different';
+    function calculateGSTType(billingState) {
+        const state = String(billingState == null ? currentBillingState : billingState).trim();
+        const firm = String(firmState || '').trim();
+        if (!state || !firm) {
+            // Export / missing Indian state: Apply GST as IGST
+            return (invoiceIsInternational || document.getElementById('applyGST')) ? 'different' : null;
+        }
+        return (state.toUpperCase() === firm.toUpperCase()) ? 'same' : 'different';
+    }
+
+    function refreshCurrentInvoiceGst() {
+        refreshInvoiceGstFields(calculateGSTType(currentBillingState));
     }
 
     function openAddressSelector() {
@@ -630,10 +785,10 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
             row.innerHTML = `
             <td class="p-3 text-center align-top">
                 <input type="radio" name="addressRadio" value="${addr.id}" data-bill-to="${addr.bill_to}" data-ship-to="${addr.ship_to}" ${addr.id == currentAddressId ? 'checked' : ''} class="h-4 w-4 text-orange-600">
-                ${addr.order_number ? `<div class="mt-1 text-xs text-gray-500">${addr.order_number}</div>` : ''}
+                ${addr.order_number ? `<div class="mt-1">${invoiceOrderDetailsLink(addr.order_number)}</div>` : ''}
             </td>
-            <td class="p-3 text-sm text-gray-700">${addr.bill_to}</td>
-            <td class="p-3 text-sm text-gray-700">${addr.ship_to || '<span class="text-gray-400">No shipping address</span>'}</td>
+            <td class="p-3 text-sm text-gray-700 leading-relaxed">${addr.bill_html || addr.bill_to}</td>
+            <td class="p-3 text-sm text-gray-700 leading-relaxed">${addr.ship_html || addr.ship_to || '<span class="text-gray-400">No shipping address</span>'}</td>
         `;
             tableBody.appendChild(row);
         });
@@ -670,6 +825,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         const addressId = selectedRadio.value;
         const billTo = selectedRadio.getAttribute('data-bill-to');
         const shipTo = selectedRadio.getAttribute('data-ship-to');
+        const selectedAddress = addressData.find(a => a.id == addressId);
 
         // Update form fields
         document.getElementById('vp_order_info_id').value = addressId;
@@ -678,12 +834,14 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
 
         const billToText = document.getElementById('billToText');
         if (billToText) {
-            billToText.textContent = billTo;
+            billToText.textContent = billTo || 'No billing address found';
         }
 
         const shipToDisplay = document.getElementById('shipToDisplay');
         if (shipToDisplay) {
-            shipToDisplay.textContent = shipTo || '';
+            shipToDisplay.innerHTML = (selectedAddress && selectedAddress.ship_html)
+                ? selectedAddress.ship_html
+                : (shipTo || '');
         }
         const shipToHidden = document.getElementById('shipToDisplayValue');
         if (shipToHidden) {
@@ -691,10 +849,10 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         }
 
         // Auto-populate GST fields based on state comparison
-        const selectedAddress = addressData.find(a => a.id == addressId);
         if (selectedAddress) {
             const gstType = calculateGSTType(selectedAddress.state);
-            updateGSTFields(gstType);
+            currentBillingState = selectedAddress.state || '';
+            refreshInvoiceGstFields(gstType);
             const supplyState = document.getElementById('supplystate');
             const supplyValue = supplyState ? supplyState.querySelectorAll('span')[1] : null;
             if (supplyValue) {
@@ -791,23 +949,46 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         calculateTotals();
     }
 
+    function shouldApplyInvoiceGst() {
+        const applyGSTCheckbox = document.getElementById('applyGST');
+        if (!applyGSTCheckbox) {
+            return true;
+        }
+        return applyGSTCheckbox.checked;
+    }
+
+    function refreshInvoiceGstFields(gstType) {
+        if (shouldApplyInvoiceGst()) {
+            updateGSTFields(gstType);
+            return;
+        }
+        if (typeof clearGSTFields === 'function') {
+            clearGSTFields();
+            return;
+        }
+        calculateTotals();
+    }
+
     function updateGSTFields(gstType) {
         const rows = document.querySelectorAll('#invoiceTable tbody tr');
 
         rows.forEach(row => {
-            const gstValue = parseFloat(row.querySelector('input[name="gst[]"]')?.value) || 0;
+            const gstValue = parseFloat(
+                row.querySelector('input[name="gst[]"]')?.value
+                || row.querySelector('input[name="tax_rate[]"]')?.value
+                || 0
+            ) || 0;
             const cgstInput = row.querySelector('input[name="cgst[]"]');
             const sgstInput = row.querySelector('input[name="sgst[]"]');
             const igstInput = row.querySelector('input[name="igst[]"]');
-            console.log('Updating GST for row:', row, 'GST Type:', gstType, 'GST Value:', gstValue);
             if (gstType === 'same') {
                 // Same state: Split GST between CGST and SGST (50% each)
                 const halfGst = gstValue / 2;
                 if (cgstInput) cgstInput.value = halfGst.toFixed(2);
                 if (sgstInput) sgstInput.value = halfGst.toFixed(2);
                 if (igstInput) igstInput.value = '0';
-            } else if (gstType === 'different') {
-                // Different state: All GST goes to IGST
+            } else {
+                // Different state / export: All GST goes to IGST
                 if (cgstInput) cgstInput.value = '0';
                 if (sgstInput) sgstInput.value = '0';
                 if (igstInput) igstInput.value = gstValue.toFixed(2);
@@ -922,13 +1103,18 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         const transportIdFields = document.getElementById('transportIdFields');
         const transporterIdSelect = document.getElementById('invoice_transporter_id');
         const transporterNameInput = document.getElementById('invoice_transporter_name');
+        function applyTransportSelection(value) {
+            const useTransportId = value === 'id';
+            transportModeFields?.classList.toggle('hidden', useTransportId);
+            transportIdFields?.classList.toggle('hidden', !useTransportId);
+        }
         document.querySelectorAll('[data-transport-selection]').forEach(function(radio) {
             radio.addEventListener('change', function() {
-                const useTransportId = this.value === 'id';
-                transportModeFields?.classList.toggle('hidden', useTransportId);
-                transportIdFields?.classList.toggle('hidden', !useTransportId);
+                applyTransportSelection(this.value);
             });
         });
+        const selectedTransport = document.querySelector('[data-transport-selection]:checked');
+        applyTransportSelection(selectedTransport ? selectedTransport.value : 'id');
         transporterIdSelect?.addEventListener('change', function() {
             const option = this.options[this.selectedIndex];
             if (transporterNameInput) {
@@ -936,10 +1122,107 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
             }
         });
 
-        // Set initial GST based on default billing state
-        const gstType = calculateGSTType('<?php echo $billingState; ?>');
-        updateGSTFields(gstType);
+        // Set initial GST based on default billing state and Apply GST checkbox
+        refreshCurrentInvoiceGst();
+        const applyGSTCheckbox = document.getElementById('applyGST');
+        if (applyGSTCheckbox) {
+            applyGSTCheckbox.dataset.bound = '1';
+            applyGSTCheckbox.addEventListener('change', refreshCurrentInvoiceGst);
+        }
+        initShippingPortMasterFields();
+        initFinalDestinationCountryField();
     });
+
+    function shippingPortTypeFromPreCarriage(selectEl) {
+        const selected = selectEl?.options?.[selectEl.selectedIndex];
+        const fromData = (selected?.dataset?.portType || '').toLowerCase();
+        if (fromData) {
+            return fromData;
+        }
+        const value = String(selectEl?.value || '').toLowerCase();
+        if (value.indexOf('sea') !== -1) return 'sea';
+        if (value.indexOf('inland') !== -1) return 'inland';
+        if (value.indexOf('dry') !== -1) return 'dry';
+        return 'air';
+    }
+
+    function syncShippingPortCode() {
+        const loading = document.getElementById('port_of_loading');
+        const shipping = document.getElementById('shipping_port');
+        if (!loading || !shipping || loading.tagName !== 'SELECT') {
+            return;
+        }
+        const selected = loading.options[loading.selectedIndex];
+        const code = selected?.dataset?.portCode || '';
+        if (code) {
+            shipping.value = code;
+        }
+    }
+
+    function filterPortOfLoadingByType(keepCurrent) {
+        const preCarriage = document.getElementById('pre_carriage_by');
+        const loading = document.getElementById('port_of_loading');
+        if (!preCarriage || !loading || loading.tagName !== 'SELECT') {
+            return;
+        }
+        const type = shippingPortTypeFromPreCarriage(preCarriage);
+        const current = loading.value;
+        let firstVisible = '';
+        Array.from(loading.options).forEach(function (opt) {
+            if (!opt.value) {
+                opt.hidden = false;
+                return;
+            }
+            const match = (opt.dataset.portType || '') === type;
+            opt.hidden = !match;
+            opt.disabled = !match;
+            if (match && firstVisible === '') {
+                firstVisible = opt.value;
+            }
+        });
+        const selected = loading.options[loading.selectedIndex];
+        if (!keepCurrent || !selected || selected.hidden || !selected.value) {
+            loading.value = firstVisible;
+        } else if (current) {
+            loading.value = current;
+        }
+        syncShippingPortCode();
+    }
+
+    function initShippingPortMasterFields() {
+        const preCarriage = document.getElementById('pre_carriage_by');
+        const loading = document.getElementById('port_of_loading');
+        if (!preCarriage || !loading || loading.tagName !== 'SELECT') {
+            return;
+        }
+        filterPortOfLoadingByType(true);
+        preCarriage.addEventListener('change', function () {
+            filterPortOfLoadingByType(false);
+        });
+        loading.addEventListener('change', syncShippingPortCode);
+    }
+
+    function syncShippingCountryCode() {
+        const country = document.getElementById('country_of_final_destination');
+        const codeInput = document.getElementById('shipping_country_code');
+        if (!country || !codeInput || country.tagName !== 'SELECT') {
+            return;
+        }
+        const selected = country.options[country.selectedIndex];
+        const code = selected?.dataset?.countryCode || '';
+        if (code) {
+            codeInput.value = code;
+        }
+    }
+
+    function initFinalDestinationCountryField() {
+        const country = document.getElementById('country_of_final_destination');
+        if (!country || country.tagName !== 'SELECT') {
+            return;
+        }
+        syncShippingCountryCode();
+        country.addEventListener('change', syncShippingCountryCode);
+    }
 
     // Validate international section before submitting
     function validateInternationalSection() {
@@ -1151,22 +1434,10 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
 
     // Add event listener for applyGST checkbox
     document.addEventListener('DOMContentLoaded', function() {
-        // Set initial GST based on default billing state
-        const gstType = calculateGSTType('<?php echo $billingState; ?>');
-        updateGSTFields(gstType);
-
-        // Add listener for GST checkbox
         const applyGSTCheckbox = document.getElementById('applyGST');
-        if (applyGSTCheckbox) {
-            applyGSTCheckbox.addEventListener('change', function() {
-                if (this.checked) {
-                    const gstType = calculateGSTType('<?php echo $billingState; ?>');
-                    updateGSTFields(gstType);
-                } else {
-                    // Clear all GST values
-                    clearGSTFields();
-                }
-            });
+        if (applyGSTCheckbox && applyGSTCheckbox.dataset.bound !== '1') {
+            applyGSTCheckbox.dataset.bound = '1';
+            applyGSTCheckbox.addEventListener('change', refreshCurrentInvoiceGst);
         }
     });
 
@@ -1236,7 +1507,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                     data.items.forEach(item => {
                         const row = document.createElement('tr');
                         row.innerHTML = `                    
-                    <td class="border-b border-gray-100 p-3" data-item='${JSON.stringify(item)}'>${item.order_number || ''}</td>
+                    <td class="border-b border-gray-100 p-3" data-item='${JSON.stringify(item)}'>${invoiceOrderDetailsLink(item.order_number) || (item.order_number || '')}</td>
                     <td class="border-b border-gray-100 p-3">${item.sku || ''}</td>
                     <td class="border-b border-gray-100 p-3">${item.title || ''}</td>
                     <td class="border-b border-gray-100 p-3 text-right">${item.unit_price ? "₹"+item.unit_price : '0.00'}</td>
@@ -1293,15 +1564,17 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 const addPrefix = (itemData.currency || 'INR') === 'INR' ? '₹' : (itemData.currency || 'INR') + ' ';
                 const addImage = itemData.image ? `<img src="${htmlspecialchars(itemData.image)}" alt="" class="h-10 w-10 rounded-lg object-cover ring-1 ring-gray-200">` : '';
                 newRow.innerHTML = `
-                <input type="hidden" name="order_number[]" value="${itemData.order_number || ''}">
-                <input type="hidden" name="item_code[]" value="${itemData.item_code || ''}">
-                <input type="hidden" name="gst[]" value="${itemData.gst || '0'}">
-                <input type="hidden" name="tax_rate[]" value="${itemData.gst || '0'}">
-                <input type="hidden" name="currency[]" value="${itemData.currency || 'INR'}">
-                <input type="hidden" name="image_url[]" value="${itemData.image || ''}">
-                <input type="hidden" name="groupname[]" value="${itemData.groupname || ''}">
-                <td class="rounded-l-xl px-3 py-3 font-medium text-gray-500">${tbody.children.length + 1}</td>
-                <td class="px-3 py-3 font-medium text-slate-800"><span>${itemData.sku || ''}</span></td>
+                <td class="rounded-l-xl px-3 py-3 font-medium text-gray-500">
+                    <input type="hidden" name="order_number[]" value="${itemData.order_number || ''}">
+                    <input type="hidden" name="item_code[]" value="${itemData.item_code || ''}">
+                    <input type="hidden" name="gst[]" value="${itemData.gst || '0'}">
+                    <input type="hidden" name="tax_rate[]" value="${itemData.gst || '0'}">
+                    <input type="hidden" name="currency[]" value="${itemData.currency || 'INR'}">
+                    <input type="hidden" name="image_url[]" value="${itemData.image || ''}">
+                    <input type="hidden" name="groupname[]" value="${itemData.groupname || ''}">
+                    ${tbody.children.length + 1}
+                </td>
+                <td class="px-3 py-3 font-medium text-slate-800"><span>${itemData.sku || ''}</span>${itemData.order_number ? `<div class="mt-1">${invoiceOrderDetailsLink(itemData.order_number)}</div>` : ''}</td>
                 <td class="px-3 py-3" colspan="2">
                     <div class="flex items-start gap-3">${addImage}<span class="leading-snug">${itemData.title ? htmlspecialchars(itemData.title) : ''}</span></div>
                     <input type="hidden" name="item_name[]" value="${itemData.title ? htmlspecialchars(itemData.title) : ''}" required>
@@ -1343,8 +1616,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
             }
 
             // Update GST fields based on current billing state
-            const gstType = calculateGSTType('<?php echo $billingState; ?>');
-            updateGSTFields(gstType);
+            refreshCurrentInvoiceGst();
 
             calculateTotals();
             // Close modal

@@ -1,909 +1,945 @@
 <div class="max-w-7xl mx-auto space-y-6 px-2 sm:px-4 lg:px-6">
     <!-- Header -->
-    <div class="shadow-[0px_10px_15px_-3px_#0000001A] bg-white rounded-2xl shadow mt-6 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-      <div class="bg-orange-500 text-white p-3 rounded-xl shadow-[0px_10px_15px_-3px_#0000001A]">
-        <img src="<?php echo base_url('images/icons.svg'); ?>" alt="">
+    <div class="shadow-[0px_10px_15px_-3px_#0000001A] bg-white rounded-2xl shadow mt-6 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <div class="bg-orange-500 text-white p-3 rounded-xl shadow-[0px_10px_15px_-3px_#0000001A]">
+          <img src="<?php echo base_url('images/icons.svg'); ?>" alt="Dispatch Icon">
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold bg-gradient-to-r from-[#1E2939] to-[#4A5565] bg-clip-text text-transparent">
+            Ship Order
+          </h1>
+          <p class="text-gray-500 text-sm text-[#6A7282]">
+            Process dispatch & courier booking for Invoice #<?php echo htmlspecialchars($_GET['invoice_id'] ?? ''); ?>
+          </p>
+        </div>
       </div>
-      <div>
-        <h1 class="text-2xl font-bold bg-gradient-to-r from-[#1E2939] to-[#4A5565] bg-clip-text text-transparent">
-          Ship Order</h1>
-        <p class="text-gray-500 text-sm text-[#6A7282]">Create and manage shipping orders</p>
-      </div>
+      <a href="<?php echo base_url('?page=dispatch&action=list'); ?>" class="text-sm font-semibold text-orange-600 hover:text-orange-700 underline">
+        ← Back to Dispatch List
+      </a>
     </div>
+
     <?php if (isset($_GET['status']) && $_GET['status'] === 'error' && isset($_GET['message'])): ?>
-        <div class="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-            <p class="text-red-600 font-semibold"><?php echo htmlspecialchars($_GET['message']); ?></p>
+        <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+            <p class="text-red-600 font-semibold text-sm"><?php echo htmlspecialchars($_GET['message']); ?></p>
         </div>
     <?php elseif (isset($_GET['status']) && $_GET['status'] === 'success'): ?>
-        <div class="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-            <p class="text-green-600 font-semibold">Dispatch created successfully!</p>
+        <div class="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+            <p class="text-green-600 font-semibold text-sm">Dispatch created successfully!</p>
         </div>
     <?php endif; ?>
-     <?php 
+
+    <?php 
     $isInternational = !empty($is_international);
     $primaryOrderNumber = (string) ($primary_order_number ?? '');
-    //if dispatch records not found for this invoice, show form to create dispatch, else show dispatch details and labels
-    if(isset($dispatchRecords) && count($dispatchRecords) == 0) {
-        //dispatch records not found, show form to create dispatch
+    $dispatchRecords = is_array($dispatchRecords ?? null) ? $dispatchRecords : [];
+
+    // IF DISPATCH RECORDS ALREADY EXIST (Already created / shipped)
+    if (count($dispatchRecords) > 0): 
     ?>
-    <form id="dispatchForm" method="POST" action="">
-      <input type="hidden" name="invoice_id" value="<?php echo htmlspecialchars($_GET['invoice_id'] ?? ''); ?>">
-
-      <?php if($invoices && count($invoices) > 0){
-          $invoice = $invoices[0];
-          $items = $invoice['items'] ?? [];
-          $groupedItems = [];
-          
-          // Group items by box_no
-          foreach($items as $item) {
-              $boxNo = $item['box_no'] ?? 1;
-              if(!isset($groupedItems[$boxNo])) {
-                  $groupedItems[$boxNo] = [];
-              }
-              $groupedItems[$boxNo][] = $item;
-          }
-          
-          ksort($groupedItems);
-      ?>
-  
-      <!-- DYNAMIC BOXES -->
-      <?php foreach($groupedItems as $boxNo => $boxItems): ?>
-      <div id="box-section-<?php echo $boxNo; ?>" class="shadow-[0px_10px_15px_-3px_#0000001A] bg-white rounded-2xl shadow overflow-hidden box-section mb-6" data-box-no="<?php echo $boxNo; ?>" data-order-number="<?php echo htmlspecialchars($boxItems[0]['order_number'] ?? $primaryOrderNumber); ?>">
-
-        <div class="bg-orange-500 p-6 text-white">
-
-          <div class="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-6">
-
-            <span class="bg-[#FFFFFF33] backdrop-blur-[8px] px-4 py-1 rounded-lg text-lg font-bold leading-relaxed w-fit">
-              Box <?php echo $boxNo; ?>
-            </span>
-
-            <div class="bg-[#FFFFFF33] backdrop-blur-[8px] flex flex-col sm:flex-row gap-4 sm:gap-8 px-6 py-3 rounded-xl text-center w-full lg:w-auto">
-              <div>
-                <p class="text-xs opacity-80 leading-relaxed">Volumetric Weight</p>
-                <p class="font-semibold volumetric-weight">0.0 kg</p>
-              </div>
-
-              <div class="border-x px-8 border-white/30">
-                <p class="text-xs opacity-80 leading-relaxed">Billable Weight</p>
-                <p class="font-semibold billable-weight">1 kg</p>
-              </div>
-
-              <div>
-                <p class="text-xs opacity-80 leading-relaxed">Shipping Charges</p>
-                <p class="font-semibold shipping-charges">₹197</p>
-              </div>
+        <div class="bg-green-50 border border-green-200 rounded-xl p-6 mb-6">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+                <div>
+                    <p class="text-green-800 font-bold text-lg">✓ Dispatch Already Processed</p>
+                    <p class="text-green-700 text-sm mt-0.5">Below are the shipment details, AWB numbers, and shipping labels for this invoice.</p>
+                </div>
+                <a href="<?php echo base_url('?page=dispatch&action=list'); ?>" class="text-green-700 hover:text-green-800 underline font-semibold text-sm">
+                    ← Go to Dispatch List
+                </a>
             </div>
-          </div>
-
-          <!-- Inputs -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-
-            <div class="flex flex-col gap-2">
-              <label class="text-white text-sm font-medium">Box Size</label>
-              <select name="box_size[<?php echo $boxNo; ?>]" class="h-10 rounded-lg px-3 bg-gray-100 text-gray-700 outline-none box-size-select" onchange="populateDimensions(this)">              
-                  <option value="">Custom Size</option>
-                  <option value="R-1" data-length="22" data-width="17" data-height="5">R-1 (22x17x5 inch)</option>
-                  <option value="R-2" data-length="16" data-width="13" data-height="13">R-2 (16x13x13 inch)</option>
-                  <option value="R-3" data-length="16" data-width="11" data-height="7">R-3 (16x11x7 inch)</option>
-                  <option value="R-4" data-length="13" data-width="10" data-height="7">R-4 (13x10x7 inch)</option>
-                  <option value="R-5" data-length="21" data-width="11" data-height="7">R-5 (21x11x7 inch)</option>
-                  <option value="R-6" data-length="11" data-width="10" data-height="8">R-6 (11x10x8 inch)</option>
-                  <option value="R-7" data-length="8" data-width="6" data-height="5">R-7 (8x6x5 inch)</option>
-                  <option value="R-8" data-length="12" data-width="12" data-height="1.5">R-8 (12x12x1.5 inch)</option>
-                  <option value="R-9" data-length="17" data-width="12" data-height="2">R-9 (17x12x2 inch)</option>
-                  <option value="R-10" data-length="12" data-width="9" data-height="2">R-10 (12x9x2 inch)</option>
-                  <option value="R-11" data-length="10" data-width="10" data-height="2">R-11 (10x10x2 inch)</option>
-                  <option value="R-12" data-length="13" data-width="9" data-height="5">R-12 (13x9x5 inch)</option>
-                  <option value="R-13" data-length="11" data-width="8" data-height="5">R-13 (11x8x5 inch)</option>
-                  <option value="R-14" data-length="14" data-width="12" data-height="10">R-14 (14x12x10 inch)</option>
-              </select>
-            </div>
-
-            <div class="flex flex-col gap-2">
-              <label class="text-white text-sm font-medium">Length</label>
-              <input type="text" name="box_length[<?php echo $boxNo; ?>]" placeholder="Inch" class="h-10 rounded-lg px-3 bg-gray-100 text-gray-700 outline-none box-length" onchange="calculateWeight(this)">
-            </div>
-
-            <div class="flex flex-col gap-2">
-              <label class="text-white text-sm font-medium">Width</label>
-              <input type="text" name="box_width[<?php echo $boxNo; ?>]" placeholder="Inch" class="h-10 rounded-lg px-3 bg-gray-100 text-gray-700 outline-none box-width" onchange="calculateWeight(this)">
-            </div>
-
-            <div class="flex flex-col gap-2">
-              <label class="text-white text-sm font-medium">Height</label>
-              <input type="text" name="box_height[<?php echo $boxNo; ?>]" placeholder="Inch" class="h-10 rounded-lg px-3 bg-gray-100 text-gray-700 outline-none box-height" onchange="calculateWeight(this)">
-            </div>
-
-            <div class="flex flex-col gap-2">
-              <label class="text-white text-sm font-medium">Weight (kg)</label>
-              <input type="text" name="box_weight[<?php echo $boxNo; ?>]" placeholder="kg" class="h-10 rounded-lg px-3 bg-gray-100 text-gray-700 outline-none box-actual-weight" onchange="calculateWeight(this)">
-            </div>
-
-          </div>
         </div>
 
-        <div class="p-6">
+        <!-- Dispatch Records Grid -->
+        <div class="grid grid-cols-1 gap-6">
+            <?php foreach ($dispatchRecords as $dispatch): ?>
+            <div class="bg-white rounded-2xl shadow-[0px_10px_15px_-3px_#0000001A] overflow-hidden border border-gray-200">
+                <div class="bg-orange-500 p-5 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h3 class="text-lg font-bold mb-0.5">Box <?php echo htmlspecialchars($dispatch['box_no'] ?? '1'); ?></h3>
+                        <p class="text-orange-100 text-xs">Dispatch ID: #<?php echo htmlspecialchars($dispatch['id'] ?? 'N/A'); ?> | Order: <?php echo htmlspecialchars($dispatch['order_number'] ?? 'N/A'); ?></p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3 text-xs">
+                        <?php if (!empty($dispatch['courier_name'])): ?>
+                            <span class="bg-white/20 backdrop-blur px-3 py-1 rounded-md font-semibold">Courier: <?php echo htmlspecialchars($dispatch['courier_name']); ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($dispatch['awb_code'])): ?>
+                            <span class="bg-white text-gray-900 px-3 py-1 rounded-md font-bold">AWB: <?php echo htmlspecialchars($dispatch['awb_code']); ?></span>
+                        <?php endif; ?>
+                    </div>
+                </div>
 
-          <!-- Shipping Details -->
-          <div class="border border-[#D1D1D2] bg-[#F3F3F3] p-4 rounded-[14px] mb-6">
-            <div class="flex items-center gap-2 mb-2">
-              <span class="w-2 h-5 bg-black rounded-md"></span>
-              <h2 class="text-md font-bold text-[#1E2939]">Shipping Details</h2>
+                <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-700 border-b border-gray-100 bg-gray-50/50">
+                    <div>
+                        <span class="text-xs text-gray-500 block">Courier Partner</span>
+                        <strong class="font-semibold text-gray-900"><?php echo htmlspecialchars($dispatch['courier_name'] ?? 'N/A'); ?></strong>
+                    </div>
+                    <div>
+                        <span class="text-xs text-gray-500 block">Status</span>
+                        <span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 uppercase">
+                            <?php echo htmlspecialchars($dispatch['shipment_status'] ?? 'created'); ?>
+                        </span>
+                    </div>
+                    <div>
+                        <span class="text-xs text-gray-500 block">Dimensions & Weight</span>
+                        <span class="font-medium text-gray-900">
+                            <?php echo htmlspecialchars(($dispatch['length'] ?? '0') . 'x' . ($dispatch['width'] ?? '0') . 'x' . ($dispatch['height'] ?? '0') . ' in | ' . ($dispatch['weight'] ?? '0') . ' kg'); ?>
+                        </span>
+                    </div>
+                    <div>
+                        <span class="text-xs text-gray-500 block">Pickup Location</span>
+                        <span class="font-medium text-gray-900"><?php echo htmlspecialchars($dispatch['pickup_location'] ?? 'Head Off'); ?></span>
+                    </div>
+                </div>
+
+                <div class="p-6 flex flex-wrap items-center justify-between gap-4">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <?php if (!empty($dispatch['label_url'])): ?>
+                            <a href="<?php echo htmlspecialchars($dispatch['label_url']); ?>" target="_blank" rel="noopener"
+                               class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+                                📄 View Shipping Label
+                            </a>
+                        <?php endif; ?>
+                        <button type="button" onclick="generateEInvoice(<?php echo (int)($dispatch['invoice_id'] ?? $_GET['invoice_id'] ?? 0); ?>, this)"
+                                class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2 transition">
+                            ⚡ Generate E-Invoice
+                        </button>
+                        <?php if (!empty($dispatch['tracking_url'])): ?>
+                            <a href="<?php echo htmlspecialchars($dispatch['tracking_url']); ?>" target="_blank" rel="noopener"
+                               class="bg-gray-800 hover:bg-gray-900 text-white font-semibold px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+                                🔗 Track Shipment
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
             </div>
-
-            <p class="text-gray-600 text-sm pl-3.5 text-[#1E2939]">
-              <span class="font-bold">Ship To:</span>
-              <?php if(isset($invoice['address']['shipping_first_name']) && !empty($invoice['address']['shipping_first_name'])): ?>
-              <?php echo $invoice['address']['shipping_first_name'] ?? ''; ?><?php echo $invoice['address']['shipping_last_name'] ?? ''; ?>, <?php echo $invoice['address']['shipping_address_line1'].' '.$invoice['address']['shipping_address_line2']; ?>, <?php echo $invoice['address']['shipping_city']; ?>, <?php echo $invoice['address']['shipping_state']; ?> - <?php echo $invoice['address']['shipping_zipcode']; ?>
-              <?php else: ?>
-              <?php echo $invoice['address']['first_name'] ?? ''; ?><?php echo $invoice['address']['last_name'] ?? ''; ?>, <?php echo $invoice['address']['address_line1'].' '.$invoice['address']['address_line2']; ?>, <?php echo $invoice['address']['city']; ?>, <?php echo $invoice['address']['state']; ?> - <?php echo $invoice['address']['zipcode']; ?>
-              <?php endif; ?>
-            </p>
-
-            <p class="text-gray-600 text-sm mt-1.5 pl-3.5 text-[#1E2939]">
-                <?php if(isset($invoice['address']['gstin']) && !empty($invoice['address']['gstin'])): ?>
-              <span class="font-bold">GST:</span>
-              <?php echo $invoice['address']['gstin'] ?? 'N/A'; ?>
-              <?php endif; ?>
-            </p>
-          </div>
-
-          <!-- SKU GRID -->
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-5">
-            <?php foreach($boxItems as $index => $item): ?>
-              <!-- CARD -->
-              <div class="border-2 border-gray-200 rounded-xl p-4 flex flex-col sm:flex-row gap-4">
-                <div class="relative">
-                  <img src="<?php echo $item['image_url'] ?? 'https://placehold.co/90x120'; ?>"
-                    class="w-full sm:w-[96px] h-[180px] sm:h-[112px] border-2 border-gray-100 object-cover rounded-lg">
-                  <span
-                    class="absolute -top-2 -right-2 bg-orange-600 text-white text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full">
-                    <?php echo str_pad($index + 1, 2, '0', STR_PAD_LEFT); ?>
-                  </span>
-                </div>
-
-                <div class="flex-1 text-sm text-[#1E2939] space-y-1.5">
-                  <p><strong class="text-gray-600 text-[#4A5565]">SKU</strong> : <?php echo $item['sku'] ?? 'N/A'; ?></p>
-                  <p><strong class="text-gray-600 text-[#4A5565]">Quantity</strong> : <?php echo $item['quantity'] ?? '01'; ?></p>
-                  <p><strong class="text-gray-600 text-[#4A5565]">Weight</strong> : <?php echo $item['weight'] ?? '0.5'; ?> kg</p>
-                  <?php if(isset($item['size'])): ?>
-                    <p><strong class="text-gray-600 text-[#4A5565]">Size</strong> : <?php echo $item['size']; ?></p>
-                  <?php endif; ?>
-                </div>
-                <input type="hidden" name="box_items[<?php echo $boxNo; ?>][]" value="<?php echo $item['id']; ?>">
-                <input type="hidden" name="order_numbers[<?php echo $boxNo; ?>][]" value="<?php echo $item['order_number']; ?>">
-                <input type="hidden" name="item_weights[<?php echo $boxNo; ?>][]" value="<?php echo $item['weight'] ?? '0.5'; ?>">
-                <input type="hidden" name="item_billable_weights[<?php echo $boxNo; ?>][]" value="<?php echo $item['weight'] ?? '0.5'; ?>">
-                <input type="hidden" name="item_shipping_charges[<?php echo $boxNo; ?>][]" value="<?php echo $item['shipping_charges'] ?? '0'; ?>">
-                <input type="hidden" name="item_groupnames[<?php echo $boxNo; ?>][]" value="<?php echo $item['groupname'] ?? ''; ?>">
-              </div>
             <?php endforeach; ?>
-          </div>
         </div>
-        <?php if ($isInternational): ?>
-        <div class="px-6 pb-4 border-t border-orange-100 bg-orange-50/40">
-          <div class="flex items-center gap-2 mb-3 mt-4">
-            <span class="text-sm font-bold text-gray-900">International courier (Aramex)</span>
-            <span class="text-xs rounded-full bg-indigo-100 text-indigo-800 px-2 py-0.5 font-semibold">Required</span>
-          </div>
-          <div id="courier-container-<?php echo $boxNo; ?>" class="courier-container text-sm text-gray-600">Enter box dimensions and weight to load Aramex rates.</div>
-          <input type="hidden" name="partner_code[<?php echo $boxNo; ?>]" class="box-partner-code" value="">
-          <input type="hidden" name="partner_account_id[<?php echo $boxNo; ?>]" class="box-partner-account-id" value="">
-          <input type="hidden" name="product_group[<?php echo $boxNo; ?>]" class="box-product-group" value="">
-          <input type="hidden" name="product_type[<?php echo $boxNo; ?>]" class="box-product-type" value="">
-          <input type="hidden" name="courier_name[<?php echo $boxNo; ?>]" class="box-courier-name" value="">
-          <input type="hidden" name="courier_etd[<?php echo $boxNo; ?>]" class="box-courier-etd" value="">
+
+    <?php 
+    // ELSE: NEW DISPATCH FORM (Bulk Dispatch Style single order card)
+    else: 
+    ?>
+
+        <div id="invDispatchesContainer" class="space-y-6">
+            <!-- Dynamically populated via JS using window.SINGLE_DISPATCH_PAYLOAD -->
         </div>
-        <?php endif; ?>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-5">
-            <div id="labels-container-<?php echo $boxNo; ?>" class="p-4">
-            <!-- <iframe src="https://docs.google.com/gview?url=https://kr-shipmultichannel-mum.s3.ap-south-1.amazonaws.com/298507/labels/d8bc2ca9af903d3f6165b74c042a54f4.pdf&embedded=true" class="w-full h-96 border border-gray-300 rounded-lg" ></iframe> -->
-            <!-- <iframe id="label-frame-" src="https://kr-shipmultichannel-mum.s3.ap-south-1.amazonaws.com/298507/labels/d8bc2ca9af903d3f6165b74c042a54f4.pdf" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;"></iframe> -->
-            <iframe id="label-frame-<?php echo $boxNo; ?>" src="" width="100%" class="w-full h-96 border border-gray-300 rounded-lg" style="display:none;">
-            </iframe>
-            
+
+        <div class="border-t border-gray-200 px-6 py-4 flex flex-wrap justify-between items-center gap-4 bg-white rounded-2xl shadow-sm">
+            <div id="bluedartExcelExportHint" class="hidden min-w-0 flex-1 flex flex-col gap-0.5 text-left pr-3">
+                <span class="text-xs font-semibold text-sky-900">Blue Dart Items Selected</span>
+                <span class="text-[11px] text-gray-500">Export box details to Excel for manual booking on the Blue Dart dashboard.</span>
             </div>
-            
-      </div>
-      <?php endforeach; ?>
-
-      <!-- DELIVERY INFO -->
-      <div class="shadow-[0px_10px_15px_-3px_#0000001A] bg-white rounded-2xl shadow overflow-hidden">
-
-        <div class="bg-orange-500 py-4 px-7 text-white">
-          <div class="flex justify-start items-center gap-2">
-            <img src="<?php echo base_url('images/info_img.svg'); ?>" alt="">
-            <span class="text-lg font-bold leading-relaxed">
-              Delivery Information
-            </span>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 items-end p-7">
-
-          <div class="flex flex-col gap-2">
-            <label class="flex items-center gap-2 text-[#364153] font-bold text-sm">
-              <img src="<?php echo base_url('images/order.svg'); ?>" alt="">
-              Delivery Partner
-            </label>
-
-            <?php if ($isInternational): ?>
-            <input type="text" name="delivery_partner" id="delivery_partner_display" value="Aramex (select service above)"
-              readonly class="h-12 px-4 rounded-xl border-2 border-gray-300 bg-gray-50 text-[#0A0A0A]">
-            <?php else: ?>
-            <input type="text" name="delivery_partner" value="Shiprocket"
-              class="h-12 px-4 rounded-xl border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 text-[#0A0A0A]">
-            <?php endif; ?>
-          </div>
-
-          <!-- <div class="flex flex-col gap-2">
-            <label class="flex items-center gap-2 text-[#364153] font-bold text-sm">
-              <img src="<?php //echo base_url('images/cart.svg'); ?>" alt="">
-              Shipment Type
-            </label>
-
-            <select name="shipment_type" class="h-12 px-4 rounded-xl border-2 border-gray-300 focus:outline-none text-[#0A0A0A] focus:ring-2 focus:ring-gray-200">
-              <option value="Light / Surface">Light / Surface</option>
-              <option value="Standard">Standard</option>
-              <option value="Express">Express</option>
-            </select>
-          </div> -->
-
-          <div class="flex flex-col gap-2 col-span-2">
-            <label class="flex items-center gap-2 text-[#364153] font-bold text-sm">
-              <img src="<?php echo base_url('images/location.svg'); ?>" alt="">
-              Pickup Location
-            </label>
-            <?php $pickupLocations = $invoice['pickup_locations'] ?? []; ?>
-            <select name="pickup_location" class="h-12 px-4 rounded-xl border-2 border-gray-300 focus:outline-none text-[#0A0A0A] focus:ring-2 focus:ring-gray-200">
-              <option value="">Select Pickup Location</option>
-              <?php foreach($pickupLocations as $location): ?>
-                <option value="<?php echo htmlspecialchars($location['pickup_location'] ?? ''); ?>" <?php echo (isset($location['pickup_location']) && 'Head Off' == $location['pickup_location']) ? 'selected' : ''; ?>>
-                  <?php echo htmlspecialchars($location['address'] ?? ''); ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-            <!-- <input type="text" name="pickup_location" value="Wazirpur"
-              class="h-12 px-4 rounded-xl border-2 border-gray-300 focus:outline-none text-[#0A0A0A] focus:ring-2 focus:ring-gray-200"> -->
-          </div>
-
-          <!-- <div class="flex flex-col gap-2">
-            <label class="flex items-center gap-2 text-[#364153] font-bold text-sm">
-              <img src="<?php //echo base_url('images/notes.svg'); ?>" alt="">
-              GST No.
-            </label>
-
-            <input type="text" name="exotic_gst_no" value="<?php //echo $invoice['firm_details']['gst'] ?? ''; ?>"
-              class="h-12 px-4 rounded-xl border-2 border-gray-300 focus:outline-none text-[#0A0A0A] focus:ring-2 focus:ring-gray-200">
-          </div> -->
-        <div class="flex flex-col gap-2">
-            <div id="invoice-container" class="p-4 invoice-container" style="display:none;">
+            <div id="singleDispatchActionSlot" class="shrink-0 ml-auto flex items-center gap-3">
+                <button id="singleDispatchSubmitBtn" type="button" disabled
+                        class="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-6 py-2.5 rounded-xl text-sm inline-flex items-center gap-2 shadow-sm transition">
+                    <span>🚚</span>
+                    <span>Confirm &amp; Process Dispatch</span>
+                </button>
+                <button type="button" id="downloadBlueDartExcelBtn" class="hidden bg-sky-600 hover:bg-sky-700 text-white font-semibold px-6 py-2.5 rounded-xl text-sm inline-flex items-center gap-2 transition">
+                    <span>📥</span>
+                    <span>Export to Excel</span>
+                </button>
             </div>
         </div>
-        
-          <button type="button" onclick="submitDispatchForm(event)"
-            class="h-12 px-4 w-full sm:w-auto rounded-xl bg-black text-white font-semibold flex items-center justify-center gap-2 hover:bg-gray-900 transition">
-            <img src="<?php echo base_url('images/track_order.svg'); ?>" alt="">
-            Dispatch
-          </button>
-       
+
+    <?php endif; ?>
+</div>
+
+<!-- Modal: Select Items for Box -->
+<div id="selectItemsModal" class="fixed inset-0 z-50 hidden" aria-hidden="true">
+    <div data-modal-backdrop class="absolute inset-0 bg-black/40"></div>
+    <div class="relative z-10 w-full max-w-2xl max-h-[80vh] bg-white shadow-xl border border-gray-300 mx-3 sm:mx-6 rounded-xl overflow-hidden my-auto top-12">
+        <div class="flex justify-between items-center px-5 py-3 border-b border-gray-200 bg-orange-500 text-white">
+            <span class="font-semibold text-sm">Select Items for Box</span>
+            <button type="button" data-close-select-items aria-label="Close" class="text-white text-xl leading-none px-2 hover:text-white/80">&times;</button>
         </div>
-      </div>
-
-      <?php } else { ?>
-        <div class="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-          <p class="text-red-600 font-semibold">Invoice not found or no items available</p>
-          <a href="<?php echo base_url('?page=dispatch'); ?>" class="text-red-500 underline mt-2 inline-block">Go back</a>
+        <div class="px-5 py-4 text-xs text-gray-800 overflow-y-auto max-h-[60vh]">
+            <table class="w-full text-left border border-gray-200 text-xs rounded-lg overflow-hidden">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="p-2.5 border-b border-gray-200 w-10 text-center">
+                            <input id="selectAllModal" type="checkbox"/>
+                        </th>
+                        <th class="p-2.5 border-b border-gray-200">Item Name</th>
+                        <th class="p-2.5 border-b border-gray-200">Item Code</th>
+                        <th class="p-2.5 border-b border-gray-200 text-right">Qty</th>
+                        <th class="p-2.5 border-b border-gray-200 text-right">Weight</th>
+                    </tr>
+                </thead>
+                <tbody id="modalItemsTbody">
+                </tbody>
+            </table>
         </div>
-      <?php } ?>
+        <div class="px-5 py-3 border-t border-gray-200 flex justify-between items-center bg-gray-50">
+            <button type="button" data-close-select-items class="bg-gray-500 hover:bg-gray-600 text-white font-semibold px-4 py-1.5 rounded text-xs">
+                Cancel
+            </button>
+            <button type="button" id="addToInvoiceBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-5 py-1.5 rounded text-xs">
+                Save Selected Items
+            </button>
+        </div>
+    </div>
+</div>
 
-    </form>
-    <?php }else{ ?>
-            <div class="col-span-full">
-                <div class="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <div>
-                            <p class="text-green-600 font-semibold text-lg">✓ Dispatch Already Created</p>
-                            <p class="text-green-600 text-sm mt-1">Below are the dispatch details and labels for this invoice.</p>
-                        </div>
-                        <a href="<?php echo base_url('?page=dispatch&action=list'); ?>" class="text-green-600 hover:text-green-700 underline font-semibold">← Go to Dispatch List</a>
-                    </div>
-                </div>
-
-                <!-- Dispatch Records Grid -->
-                <div class="grid grid-cols-1 gap-6 mt-6">
-                    <?php foreach($dispatchRecords as $dispatch): ?>
-                    <div class="bg-white rounded-2xl shadow-[0px_10px_15px_-3px_#0000001A] overflow-hidden">
-                        
-                        <!-- Dispatch Header -->
-                        <div class="bg-orange-500 p-6 text-white">
-                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                <div>
-                                    <h3 class="text-lg font-bold mb-1">Box <?php echo htmlspecialchars($dispatch['box_no'] ?? 'N/A'); ?></h3>
-                                    <p class="text-blue-100 text-sm">Dispatch ID: <?php echo htmlspecialchars($dispatch['id'] ?? 'N/A'); ?></p>
-                                </div>
-                                <div class="flex flex-col gap-2">
-                                    <?php if(isset($dispatch['awb_number'])): ?>
-                                    <div class="bg-white bg-opacity-20 rounded-lg px-4 py-2">
-                                        <p class="text-xs text-blue-100">AWB Number</p>
-                                        <p class="font-bold text-white"><?php echo htmlspecialchars($dispatch['awb_number']); ?></p>
-                                    </div>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Dispatch Details -->
-                        <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 border-b border-gray-200">
-                            <div>
-                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Box Size</label>
-                                <p class="text-gray-800 font-medium mt-1"><?php echo $dispatch['length'] ?> x <?php echo $dispatch['width'] ?> x <?php echo $dispatch['height'] ?> INCH</p>
-                            </div>
-                            <div>
-                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Billable Weight</label>
-                                <p class="text-gray-800 font-medium mt-1"><?php echo htmlspecialchars($dispatch['billing_weight'] ?? 'N/A'); ?> kg</p>
-                            </div>
-                            <div>
-                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Volumetric Weight</label>
-                                <p class="text-gray-800 font-medium mt-1"><?php echo htmlspecialchars($dispatch['volumetric_weight'] ?? '0'); ?> kg</p>
-                            </div>
-                            <div>
-                                <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</label>
-                                <p class="text-gray-800 font-medium mt-1">
-                                    <?php 
-                                        $status = isset($dispatch['status']) ? strtolower($dispatch['status']) : 'pending';
-                                        $statusClass = $status === 'completed' ? 'bg-green-100 text-green-700' : ($status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700');
-                                    ?>
-                                    <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold <?php echo $statusClass; ?>">
-                                        <?php echo htmlspecialchars(ucfirst($status)); ?>
-                                    </span>
-                                </p>
-                            </div>
-                        </div>
-
-                        <!-- Box Dimensions -->
-                        <div class="p-6 bg-gray-50 border-b border-gray-200">
-                            <h4 class="font-bold text-gray-800 mb-4">Box Dimensions & Weight</h4>
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                <div class="bg-white rounded-lg p-3">
-                                    <p class="text-xs text-gray-500">Length</p>
-                                    <p class="font-semibold text-gray-800"><?php echo htmlspecialchars($dispatch['length'] ?? '0'); ?> in</p>
-                                </div>
-                                <div class="bg-white rounded-lg p-3">
-                                    <p class="text-xs text-gray-500">Width</p>
-                                    <p class="font-semibold text-gray-800"><?php echo htmlspecialchars($dispatch['width'] ?? '0'); ?> in</p>
-                                </div>
-                                <div class="bg-white rounded-lg p-3">
-                                    <p class="text-xs text-gray-500">Height</p>
-                                    <p class="font-semibold text-gray-800"><?php echo htmlspecialchars($dispatch['height'] ?? '0'); ?> in</p>
-                                </div>
-                                <div class="bg-white rounded-lg p-3">
-                                    <p class="text-xs text-gray-500">Actual Weight</p>
-                                    <p class="font-semibold text-gray-800"><?php echo htmlspecialchars($dispatch['weight'] ?? '0'); ?> kg</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Label Display -->
-                        <?php if(isset($dispatch['label_url']) && !empty($dispatch['label_url'])): ?>
-                        <div class="p-6 bg-white">
-                            <h4 class="font-bold text-gray-800 mb-4">Shipping Label</h4>
-                            <div class="flex flex-col gap-4">
-                                <iframe 
-                                    src="https://docs.google.com/gview?url=<?php echo urlencode($dispatch['label_url']); ?>&embedded=true" 
-                                    class="w-full h-96 border-2 border-gray-300 rounded-lg" 
-                                    frameborder="0">
-                                </iframe>
-                                
-                                <div class="flex flex-col sm:flex-row gap-3">
-                                    <button type="button" onclick="printLabel('<?php echo htmlspecialchars($dispatch['label_url']); ?>')" 
-                                        class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold flex items-center justify-center gap-2">
-                                        🖨️ Print Label
-                                    </button>
-                                    <a href="<?php echo htmlspecialchars($dispatch['label_url']); ?>" target="_blank" 
-                                        class="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-semibold flex items-center justify-center gap-2">
-                                        📥 Download Label
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                        <?php else: 
-                          // button to retry
-                          ?>
-                        <div class="p-6 bg-yellow-50 border border-yellow-200 rounded-lg">
-                            <p class="text-yellow-700 font-semibold">Label not generated yet.</p>
-                            <button id="retryLabelBtn" onclick="genLabel('<?php echo htmlspecialchars($dispatch['id']); ?>')" class="mt-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-semibold">
-                                Retry Label Generation
-                            </button>
-                        </div>
-                        <?php endif; ?>
-
-                        <!-- Items in Dispatch -->
-                        <?php if(isset($dispatch['items']) && count($dispatch['items']) > 0): ?>
-                        <div class="p-6 bg-gray-50 border-t border-gray-200">
-                            <h4 class="font-bold text-gray-800 mb-4">Items in Dispatch</h4>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <?php foreach($dispatch['items'] as $itemIndex => $item): ?>
-                                <div class="bg-white rounded-lg p-4 border border-gray-200">
-                                    <div class="flex gap-3">
-                                        <?php if(isset($item['image_url'])): ?>
-                                        <img src="<?php echo htmlspecialchars($item['image_url']); ?>" alt="product" class="w-16 h-20 object-cover rounded border border-gray-200">
-                                        <?php endif; ?>
-                                        <div class="flex-1">
-                                            <p class="text-xs text-gray-500 font-semibold">SKU</p>
-                                            <p class="font-medium text-gray-800"><?php echo htmlspecialchars($item['sku'] ?? 'N/A'); ?></p>
-                                            <p class="text-xs text-gray-600 mt-2">Qty: <span class="font-semibold"><?php echo htmlspecialchars($item['quantity'] ?? '1'); ?></span></p>
-                                            <p class="text-xs text-gray-600">Wt: <span class="font-semibold"><?php echo htmlspecialchars($item['weight'] ?? '0'); ?> kg</span></p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-                        <?php endif; ?>
-
-                        <!-- Delivery Info -->
-                        <div class="p-6 border-t border-gray-200">
-                            <h4 class="font-bold text-gray-800 mb-4">Delivery Information</h4>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Courier name</p>
-                                    <p class="text-gray-800 font-medium mt-1"><?php echo htmlspecialchars($dispatch['courier_name'] ?? 'N/A'); ?></p>
-                                </div>
-                                <!-- <div>
-                                    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Pickup Location</p>
-                                    <p class="text-gray-800 font-medium mt-1"><?php //echo htmlspecialchars($dispatch['pickup_location'] ?? 'N/A'); ?></p>
-                                </div> -->
-                                <?php if(isset($dispatch['created_at'])): ?>
-                                <div>
-                                    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Created Date</p>
-                                    <p class="text-gray-800 font-medium mt-1"><?php echo htmlspecialchars(date('d M Y, H:i', strtotime($dispatch['created_at']))); ?></p>
-                                </div>
-                                <?php endif; ?>
-                                <?php if(isset($dispatch['tracking_url'])): ?>
-                                <div>
-                                    <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Tracking</p>
-                                    <a href="<?php echo htmlspecialchars($dispatch['tracking_url']); ?>" target="_blank" class="text-blue-600 hover:text-blue-800 font-medium mt-1 inline-block">
-                                        Track Shipment →
-                                    </a>
-                                </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
+<!-- Modal: Custom Box Size -->
+<div id="customBoxSizeModal" class="fixed inset-0 z-50 hidden" aria-hidden="true">
+    <div data-modal-backdrop class="absolute inset-0 bg-black/40"></div>
+    <div class="relative z-10 w-full max-w-md bg-white shadow-xl border border-gray-300 mx-3 rounded-xl overflow-hidden my-auto top-20">
+        <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200 bg-orange-500 text-white">
+            <h2 class="font-semibold text-sm">Enter Custom Box Dimensions</h2>
+            <button type="button" data-close-custom-modal aria-label="Close" class="text-white text-xl leading-none px-2 hover:text-white/80">&times;</button>
+        </div>
+        <div class="px-5 py-4 space-y-3">
+            <div>
+                <label for="modalCustomLength" class="block text-gray-700 font-medium text-xs mb-1">Length (inches)</label>
+                <input id="modalCustomLength" type="number" placeholder="22" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-orange-500 outline-none" step="0.5"/>
             </div>
-        <?php } ?>
+            <div>
+                <label for="modalCustomWidth" class="block text-gray-700 font-medium text-xs mb-1">Width (inches)</label>
+                <input id="modalCustomWidth" type="number" placeholder="17" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-orange-500 outline-none" step="0.5"/>
+            </div>
+            <div>
+                <label for="modalCustomHeight" class="block text-gray-700 font-medium text-xs mb-1">Height (inches)</label>
+                <input id="modalCustomHeight" type="number" placeholder="5" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-orange-500 outline-none" step="0.5"/>
+            </div>
+            <p class="text-xs text-gray-500">Enter dimensions in inches. All fields are required.</p>
+        </div>
+        <div class="px-5 py-3 border-t border-gray-200 flex justify-end gap-2 bg-gray-50">
+            <button type="button" data-close-custom-modal class="bg-gray-500 hover:bg-gray-600 text-white font-semibold px-4 py-1.5 rounded text-xs">
+                Cancel
+            </button>
+            <button type="button" id="applyCustomBoxSizeBtn" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-1.5 rounded text-xs">
+                Apply Custom Dimensions
+            </button>
+        </div>
+    </div>
 </div>
 
 <script>
-const DISPATCH_IS_INTERNATIONAL = <?php echo $isInternational ? 'true' : 'false'; ?>;
+window.SINGLE_DISPATCH_PAYLOAD = <?php echo json_encode($single_order_payload ?? null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE); ?>;
 
-function populateDimensions(element) {
-    const boxSection = element.closest('.box-section');
-    const selectedOption = element.options[element.selectedIndex];
-    
-    if (selectedOption.value) {
-        const length = selectedOption.getAttribute('data-length');
-        const width = selectedOption.getAttribute('data-width');
-        const height = selectedOption.getAttribute('data-height');
-        
-        boxSection.querySelector('.box-length').value = length;
-        boxSection.querySelector('.box-width').value = width;
-        boxSection.querySelector('.box-height').value = height;
-        
-        calculateWeight(element);
+(function () {
+    const payload = window.SINGLE_DISPATCH_PAYLOAD;
+    if (!payload || !payload.invoice_id) return;
+
+    const container = document.getElementById('invDispatchesContainer');
+    if (!container) return;
+
+    let currentBoxElementForModal = null;
+
+    function escapeHtml(str) {
+        return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
-}
 
-function calculateWeight(element) {
-    const boxSection = element.closest('.box-section');
-    const length = parseFloat(boxSection.querySelector('.box-length').value) || 0;
-    const width = parseFloat(boxSection.querySelector('.box-width').value) || 0;
-    const height = parseFloat(boxSection.querySelector('.box-height').value) || 0;
-    const actualWeight = parseFloat(boxSection.querySelector('.box-actual-weight').value) || 1;
-    
-    // Convert inches to cm and calculate volumetric weight
-    const lengthCm = length * 2.54;
-    const widthCm = width * 2.54;
-    const heightCm = height * 2.54;
-    const volumetricWeight = (lengthCm * widthCm * heightCm) / 5000;
-    
-    const billableWeight = Math.max(volumetricWeight, actualWeight);
-    console.log('Calculated weights - Volumetric:', volumetricWeight.toFixed(2), 'kg, Actual:', actualWeight.toFixed(2), 'kg, Billable:', billableWeight.toFixed(2), 'kg');
-    boxSection.querySelector('.volumetric-weight').textContent = volumetricWeight.toFixed(2) + ' kg';
-    boxSection.querySelector('.billable-weight').textContent = billableWeight.toFixed(2) + ' kg';
-    //item weight is used as actual weight for shipping charges calculation
-    const shippingCharges = calculateShippingCharges(billableWeight);
-    boxSection.querySelector('.shipping-charges').textContent = '₹' + shippingCharges;
-    
-    //item_shipping_charges
-    const shippingChargesInputs = boxSection.querySelectorAll('input[name^="item_shipping_charges"]');
-    shippingChargesInputs.forEach(input => {
-        input.value = shippingCharges;
-        console.log('Updated shipping charges input:', input.name, input.value);
+    function showPosModalMessage(title, message, tone = 'info') {
+        if (typeof window.showPosMessageModal === 'function') {
+            window.showPosMessageModal({ title, message, tone });
+        } else {
+            alert(title + ': ' + message);
+        }
+    }
+
+    function singleDispatchTheme(isInternational) {
+        if (isInternational) {
+            return {
+                attr: 'international',
+                orderHeader: 'bg-violet-600 text-white',
+                intlPill: '<span class="shrink-0 rounded-md bg-white/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">International</span>',
+                boxBorder: 'border-violet-400',
+                boxToolbar: 'bg-violet-50 border-violet-200',
+                boxIcon: 'bg-violet-500',
+                btnItem: 'bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-3 py-1 rounded-lg',
+                btnAddBox: 'bg-violet-600 hover:bg-violet-700 text-white font-semibold px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2',
+                btnListCourier: 'bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-semibold px-4 py-2 rounded-lg text-sm',
+                courierShipIcon: 'bg-violet-600',
+                courierCountBadge: 'bg-violet-100 text-violet-800',
+                courierPrice: 'text-violet-700',
+                courierRadio: 'text-violet-600 focus:ring-violet-500',
+                courierTileChecked: 'has-[:checked]:border-violet-500 has-[:checked]:bg-violet-50/40 has-[:checked]:ring-2 has-[:checked]:ring-violet-400 has-[:checked]:ring-offset-1',
+                courierTileHover: 'hover:border-violet-300',
+                courierTopPick: 'bg-violet-600',
+                loadingSpinner: 'border-violet-600',
+                emptyPanelBorder: 'border-violet-200',
+                emptyPanelGradient: 'from-violet-50/80',
+                emptyHeaderBorder: 'border-violet-100',
+                emptyHeaderBg: 'bg-white/70',
+                emptyIconBg: 'bg-violet-100 text-violet-700',
+                emptyTitle: 'text-violet-950',
+                emptyText: 'text-violet-900/80',
+                emptyBadge: 'bg-violet-200/80 text-violet-950',
+                emptyToolbarBg: 'bg-violet-50/50 border-violet-100/80',
+                emptyBtn: 'border-violet-200 bg-white text-violet-950 shadow-sm hover:bg-violet-50',
+            };
+        }
+        return {
+            attr: 'domestic',
+            orderHeader: 'bg-orange-500 text-white',
+            intlPill: '',
+            boxBorder: 'border-orange-400',
+            boxToolbar: 'bg-orange-50 border-orange-200',
+            boxIcon: 'bg-orange-400',
+            btnItem: 'bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1 rounded-lg',
+            btnAddBox: 'bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2',
+            btnListCourier: 'bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg text-sm',
+            courierShipIcon: 'bg-orange-500',
+            courierCountBadge: 'bg-orange-100 text-orange-800',
+            courierPrice: 'text-orange-600',
+            courierRadio: 'text-orange-500 focus:ring-orange-400',
+            courierTileChecked: 'has-[:checked]:border-orange-500 has-[:checked]:bg-orange-50/40 has-[:checked]:ring-2 has-[:checked]:ring-orange-400 has-[:checked]:ring-offset-1',
+            courierTileHover: 'hover:border-orange-300',
+            courierTopPick: 'bg-orange-500',
+            loadingSpinner: 'border-orange-500',
+            emptyPanelBorder: 'border-orange-200',
+            emptyPanelGradient: 'from-orange-50/80',
+            emptyHeaderBorder: 'border-orange-100',
+            emptyHeaderBg: 'bg-white/70',
+            emptyIconBg: 'bg-orange-100 text-orange-800',
+            emptyTitle: 'text-gray-900',
+            emptyText: 'text-gray-600',
+            emptyBadge: 'bg-orange-100 text-orange-900',
+            emptyToolbarBg: 'bg-orange-50/50 border-orange-100/80',
+            emptyBtn: 'border-orange-200 bg-white text-gray-900 shadow-sm hover:bg-orange-50',
+        };
+    }
+
+    function renderOrderCard() {
+        const isIntl = !!payload.is_international;
+        const tm = singleDispatchTheme(isIntl);
+        
+        let pickupOptsHtml = '<option value="Head Off" selected>Headoffice (Default)</option>';
+        if (Array.isArray(payload.pickup_locations) && payload.pickup_locations.length > 0) {
+            pickupOptsHtml = payload.pickup_locations.map(loc => {
+                const val = loc.pickup_location || loc.address || loc.location_name || 'Head Off';
+                const label = loc.display_name || loc.address || loc.location_name || val;
+                return `<option value="${escapeHtml(val)}">${escapeHtml(label)}</option>`;
+            }).join('');
+        }
+
+        let itemsRowsHtml = '';
+        let totalItemsWeight = 0;
+        if (Array.isArray(payload.items)) {
+            payload.items.forEach(it => {
+                const w = parseFloat(it.weight || 0.5);
+                totalItemsWeight += w;
+                itemsRowsHtml += `
+                    <div class="grid grid-cols-12 gap-2 items-center py-2 border-b border-gray-100 text-xs item-row"
+                         data-item-id="${it.id}"
+                         data-item-code="${escapeHtml(it.item_code)}"
+                         data-weight="${w}"
+                         data-groupname="${escapeHtml(it.groupname)}">
+                        <div class="col-span-2 font-medium">${escapeHtml(it.order_number || payload.order_number)}</div>
+                        <div class="col-span-3 font-semibold text-gray-800 truncate">${escapeHtml(it.groupname)}</div>
+                        <div class="col-span-2 text-right text-gray-600 font-mono">${escapeHtml(it.item_code)}</div>
+                        <div class="col-span-1 text-right">${it.quantity || 1}</div>
+                        <div class="col-span-2 text-right font-medium">${w.toFixed(3)} kg</div>
+                        <div class="col-span-2 text-right font-semibold">₹${parseFloat(it.unit_price || 0).toFixed(2)}</div>
+                    </div>
+                `;
+            });
+        }
+
+        if (totalItemsWeight <= 0) totalItemsWeight = 0.5;
+
+        const orderCardHtml = `
+            <div class="bg-white rounded-2xl shadow-sm border ${tm.boxBorder} overflow-hidden single-dispatch-card"
+                 data-invoice-id="${payload.invoice_id}"
+                 data-order-number="${escapeHtml(payload.order_number)}"
+                 data-order-theme="${tm.attr}">
+                
+                <!-- Order Card Header -->
+                <div class="${tm.orderHeader} px-6 py-4 flex flex-wrap justify-between items-center gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        ${tm.intlPill}
+                        <h2 class="text-base font-bold truncate">
+                            Order #${escapeHtml(payload.order_number)} · ${escapeHtml(payload.customer_name)}
+                        </h2>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs font-semibold bg-white/20 px-3 py-1.5 rounded-lg backdrop-blur">
+                        <span>Invoice #${escapeHtml(payload.invoice_number || payload.invoice_id)}</span>
+                    </div>
+                </div>
+
+                <!-- Shipping Address Strip -->
+                <div class="px-6 py-3 bg-gray-50 border-b border-gray-200 text-xs text-gray-700 flex items-start gap-2">
+                    <span class="font-bold shrink-0 text-gray-900">📍 Ship To:</span>
+                    <span class="font-medium text-gray-800">${escapeHtml(payload.shipping_address)}</span>
+                </div>
+
+                <!-- Boxes Container -->
+                <div class="boxes-container p-6 space-y-6">
+                    <div class="bulk-dispatch-box border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm"
+                         data-box-no="1"
+                         data-order-number="${escapeHtml(payload.order_number)}">
+                        
+                        <!-- Box Toolbar -->
+                        <div class="px-5 py-3 ${tm.boxToolbar} border-b border-gray-200 flex flex-wrap items-center justify-between gap-4">
+                            <div class="flex items-center gap-2">
+                                <span class="inline-flex items-center justify-center w-7 h-7 rounded-full ${tm.boxIcon} text-white text-xs font-bold">
+                                    📦
+                                </span>
+                                <span class="font-bold text-gray-800 text-sm">Box 1</span>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-4 text-xs">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-semibold text-gray-700">Weight (kg):</span>
+                                    <input type="number" name="weight" value="${totalItemsWeight.toFixed(3)}" step="0.1" min="0.1"
+                                           class="weight-input border border-gray-300 rounded-md px-2 py-1 w-20 text-xs font-medium focus:ring-1 focus:ring-orange-500 outline-none"/>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-semibold text-gray-700">Box Size:</span>
+                                    <select class="BoxSize border border-gray-300 rounded-md px-2 py-1 text-xs w-36 focus:ring-1 focus:ring-orange-500 outline-none bg-white">
+                                        <option value="R-1" data-length="22" data-width="17" data-height="5" selected>R-1 (22x17x5 in)</option>
+                                        <option value="R-2" data-length="16" data-width="13" data-height="13">R-2 (16x13x13 in)</option>
+                                        <option value="R-3" data-length="16" data-width="11" data-height="7">R-3 (16x11x7 in)</option>
+                                        <option value="R-4" data-length="13" data-width="10" data-height="7">R-4 (13x10x7 in)</option>
+                                        <option value="R-5" data-length="21" data-width="11" data-height="7">R-5 (21x11x7 in)</option>
+                                        <option value="R-6" data-length="11" data-width="10" data-height="8">R-6 (11x10x8 in)</option>
+                                        <option value="R-7" data-length="8" data-width="6" data-height="5">R-7 (8x6x5 in)</option>
+                                        <option value="R-8" data-length="12" data-width="12" data-height="1.5">R-8 (12x12x1.5 in)</option>
+                                        <option value="R-9" data-length="17" data-width="12" data-height="2">R-9 (17x12x2 in)</option>
+                                        <option value="R-10" data-length="12" data-width="9" data-height="2">R-10 (12x9x2 in)</option>
+                                        <option value="R-11" data-length="10" data-width="10" data-height="2">R-11 (10x10x2 in)</option>
+                                        <option value="R-12" data-length="13" data-width="9" data-height="5">R-12 (13x9x5 in)</option>
+                                        <option value="R-13" data-length="11" data-width="8" data-height="5">R-13 (11x8x5 in)</option>
+                                        <option value="R-14" data-length="14" data-width="12" data-height="10">R-14 (14x12x10 in)</option>
+                                        <option value="CUSTOM">Custom Dimensions</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-semibold text-gray-700">Pickup:</span>
+                                    <select class="pickup-location-select border border-gray-300 rounded-md px-2 py-1 text-xs w-44 focus:ring-1 focus:ring-orange-500 outline-none bg-white">
+                                        ${pickupOptsHtml}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Items Table Header -->
+                        <div class="px-5 py-2.5 bg-gray-100/80 border-b border-gray-200 text-xs font-semibold text-gray-600">
+                            <div class="grid grid-cols-12 gap-2">
+                                <div class="col-span-2">Order</div>
+                                <div class="col-span-3">Item Name</div>
+                                <div class="col-span-2 text-right">SKU</div>
+                                <div class="col-span-1 text-right">Qty</div>
+                                <div class="col-span-2 text-right">Weight</div>
+                                <div class="col-span-2 text-right">Price</div>
+                            </div>
+                        </div>
+
+                        <!-- Items Rows Container -->
+                        <div class="items-container px-5 divide-y divide-gray-100">
+                            ${itemsRowsHtml}
+                        </div>
+
+                        <!-- Courier Serviceability Section -->
+                        <div class="courier-serviceability-panel p-5 bg-gray-50/50 border-t border-gray-200">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                                    🚚 Available Courier Rates
+                                </span>
+                                <button type="button" class="btn-list-courier ${tm.btnListCourier}">
+                                    ⚡ Calculate Courier Rates
+                                </button>
+                            </div>
+                            <div class="available-courier-container min-h-[60px] text-xs text-gray-500 flex items-center justify-center border border-dashed border-gray-300 rounded-xl p-4 bg-white">
+                                Click "Calculate Courier Rates" to load live rates for this box.
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.innerHTML = orderCardHtml;
+        bindCardEvents();
+    }
+
+    function bindCardEvents() {
+        // List Couriers button
+        const btnList = container.querySelector('.btn-list-courier');
+        if (btnList) {
+            btnList.addEventListener('click', function () {
+                const boxEl = this.closest('.bulk-dispatch-box');
+                if (boxEl) fetchCouriersForBox(boxEl);
+            });
+        }
+
+        // Weight / Size change triggers courier rate refresh
+        const weightInput = container.querySelector('.weight-input');
+        const boxSizeSelect = container.querySelector('.BoxSize');
+        const pickupSelect = container.querySelector('.pickup-location-select');
+
+        if (weightInput) {
+            weightInput.addEventListener('change', function () {
+                const boxEl = this.closest('.bulk-dispatch-box');
+                if (boxEl) fetchCouriersForBox(boxEl);
+            });
+        }
+
+        if (boxSizeSelect) {
+            boxSizeSelect.addEventListener('change', function () {
+                const boxEl = this.closest('.bulk-dispatch-box');
+                if (this.value === 'CUSTOM') {
+                    openCustomBoxSizeModal(boxEl);
+                } else if (boxEl) {
+                    fetchCouriersForBox(boxEl);
+                }
+            });
+        }
+
+        if (pickupSelect) {
+            pickupSelect.addEventListener('change', function () {
+                const boxEl = this.closest('.bulk-dispatch-box');
+                if (boxEl) fetchCouriersForBox(boxEl);
+            });
+        }
+
+        // Auto fetch rates on initial page boot
+        const initialBox = container.querySelector('.bulk-dispatch-box');
+        if (initialBox) {
+            setTimeout(() => fetchCouriersForBox(initialBox), 300);
+        }
+    }
+
+    function openCustomBoxSizeModal(boxEl) {
+        currentBoxElementForModal = boxEl;
+        const modal = document.getElementById('customBoxSizeModal');
+        if (modal) modal.classList.remove('hidden');
+    }
+
+    function closeCustomBoxSizeModal() {
+        const modal = document.getElementById('customBoxSizeModal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    // Modal close listeners
+    document.querySelectorAll('[data-close-custom-modal]').forEach(btn => {
+        btn.addEventListener('click', closeCustomBoxSizeModal);
     });
 
-    //item_billable_weights
-    const billableWeightInputs = boxSection.querySelectorAll('input[name^="item_billable_weights"]');
-    billableWeightInputs.forEach(input => {
-        input.value = billableWeight.toFixed(2);
-        console.log('Updated billable weight input:', input.name, input.value);
-    });
+    const applyCustomBtn = document.getElementById('applyCustomBoxSizeBtn');
+    if (applyCustomBtn) {
+        applyCustomBtn.addEventListener('click', function () {
+            const length = parseFloat(document.getElementById('modalCustomLength').value) || 0;
+            const width = parseFloat(document.getElementById('modalCustomWidth').value) || 0;
+            const height = parseFloat(document.getElementById('modalCustomHeight').value) || 0;
 
-    if (DISPATCH_IS_INTERNATIONAL) {
-        fetchCouriersForBox(boxSection);
+            if (length <= 0 || width <= 0 || height <= 0) {
+                showPosModalMessage('Validation', 'Please enter valid custom dimensions in inches.', 'warning');
+                return;
+            }
+
+            if (currentBoxElementForModal) {
+                currentBoxElementForModal.dataset.customLength = length;
+                currentBoxElementForModal.dataset.customWidth = width;
+                currentBoxElementForModal.dataset.customHeight = height;
+                closeCustomBoxSizeModal();
+                fetchCouriersForBox(currentBoxElementForModal);
+            }
+        });
     }
-}
-function calculateShippingCharges(weight) {
-    // Simple flat rate calculation for demonstration
-    if (weight <= 1) return 197;
-    if (weight <= 3) return 247;
-    if (weight <= 5) return 347;
-    return 347 + Math.ceil((weight - 5) / 5) * 100; // Additional ₹100 for every extra 5kg
-}
-// Calculate weight on page load
-document.querySelectorAll('.box-section').forEach(section => {
-    calculateWeight(section.querySelector('input'));
-});
 
-function escapeHtml(str) {
-    return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+    function fetchCouriersForBox(boxElement) {
+        if (!boxElement) return;
 
-function syncCourierSelection(boxSection, radio) {
-    if (!boxSection || !radio) return;
-    boxSection.querySelector('.box-partner-code').value = radio.getAttribute('data-partner-code') || '';
-    boxSection.querySelector('.box-partner-account-id').value = radio.getAttribute('data-partner-account-id') || '';
-    boxSection.querySelector('.box-product-group').value = radio.getAttribute('data-product-group') || '';
-    boxSection.querySelector('.box-product-type').value = radio.getAttribute('data-product-type') || '';
-    boxSection.querySelector('.box-courier-name').value = radio.getAttribute('data-courier-name') || '';
-    const etdInput = boxSection.querySelector('.box-courier-etd');
-    if (etdInput) {
-        etdInput.value = radio.getAttribute('data-courier-etd') || '';
+        const isIntl = !!payload.is_international;
+        const tm = singleDispatchTheme(isIntl);
+        const courierContainer = boxElement.querySelector('.available-courier-container');
+        if (!courierContainer) return;
+
+        const orderNumber = payload.order_number;
+        const weight = parseFloat(boxElement.querySelector('.weight-input')?.value) || 0.5;
+        const pickupLocation = boxElement.querySelector('.pickup-location-select')?.value || 'Head Off';
+
+        const sizeSelect = boxElement.querySelector('.BoxSize');
+        let length = 22, width = 17, height = 5;
+
+        if (sizeSelect && sizeSelect.value === 'CUSTOM') {
+            length = parseFloat(boxElement.dataset.customLength) || 22;
+            width = parseFloat(boxElement.dataset.customWidth) || 17;
+            height = parseFloat(boxElement.dataset.customHeight) || 5;
+        } else if (sizeSelect && sizeSelect.selectedIndex >= 0) {
+            const opt = sizeSelect.options[sizeSelect.selectedIndex];
+            length = parseFloat(opt.getAttribute('data-length')) || 22;
+            width = parseFloat(opt.getAttribute('data-width')) || 17;
+            height = parseFloat(opt.getAttribute('data-height')) || 5;
+        }
+
+        courierContainer.innerHTML = `
+            <div class="flex items-center gap-2 text-gray-600 py-3 font-medium text-xs">
+                <div class="w-4 h-4 border-2 ${tm.loadingSpinner} border-t-transparent rounded-full animate-spin"></div>
+                <span>Fetching live courier rates for Box 1...</span>
+            </div>
+        `;
+
+        const serviceabilityPayload = {
+            order_number: orderNumber,
+            weight: weight,
+            length: length,
+            breadth: width,
+            height: height,
+            pickup_location: pickupLocation,
+            cod: 0
+        };
+
+        if (isIntl) {
+            // International Aramex fetch
+            fetch('?page=dispatch&action=getCourierServiceability', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify(serviceabilityPayload)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success || !data.couriers || !data.couriers.length) {
+                    courierContainer.innerHTML = `<div class="text-red-600 font-semibold p-2">${escapeHtml(data.message || 'No Aramex rates returned.')}</div>`;
+                    checkCouriersSelected();
+                    return;
+                }
+                renderCourierTiles(boxElement, courierContainer, tm, data.couriers, 'aramex');
+            })
+            .catch(err => {
+                courierContainer.innerHTML = `<div class="text-red-600 font-semibold p-2">Error fetching rates: ${escapeHtml(err.message)}</div>`;
+                checkCouriersSelected();
+            });
+        } else {
+            // Domestic fetch (Shiprocket + Delhivery + Blue Dart in parallel)
+            Promise.all([
+                fetch('?page=dispatch&action=getCourierServiceability', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify(serviceabilityPayload)
+                }).then(r => r.json()).catch(e => ({ success: false, message: e.message })),
+
+                fetch('?page=dispatch&action=getDirectCourierRates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify({ ...serviceabilityPayload, partner_code: 'delhivery' })
+                }).then(r => r.json()).catch(e => ({ success: false, message: e.message })),
+
+                fetch('?page=dispatch&action=getDirectCourierRates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify({ ...serviceabilityPayload, partner_code: 'bluedart' })
+                }).then(r => r.json()).catch(e => ({ success: false, message: e.message }))
+            ])
+            .then(([srRes, delhiveryRes, bdRes]) => {
+                let mergedCouriers = [];
+
+                if (srRes && srRes.success && Array.isArray(srRes.couriers)) {
+                    srRes.couriers.forEach(c => {
+                        mergedCouriers.push({ ...c, partner_code: 'shiprocket', rate_source: 'shiprocket' });
+                    });
+                }
+                if (delhiveryRes && delhiveryRes.success && Array.isArray(delhiveryRes.couriers)) {
+                    delhiveryRes.couriers.forEach(c => {
+                        mergedCouriers.push({ ...c, partner_code: 'delhivery', rate_source: 'delhivery' });
+                    });
+                }
+                if (bdRes && bdRes.success && Array.isArray(bdRes.couriers)) {
+                    bdRes.couriers.forEach(c => {
+                        mergedCouriers.push({ ...c, partner_code: 'bluedart', rate_source: 'bluedart' });
+                    });
+                }
+
+                if (mergedCouriers.length === 0) {
+                    courierContainer.innerHTML = `<div class="text-red-600 font-semibold p-2">No domestic courier rates available for pincode/weight.</div>`;
+                    checkCouriersSelected();
+                    return;
+                }
+
+                // Sort by price ascending
+                mergedCouriers.sort((a, b) => (parseFloat(a.price) || 0) - (parseFloat(b.price) || 0));
+
+                renderCourierTiles(boxElement, courierContainer, tm, mergedCouriers, 'domestic');
+            })
+            .catch(err => {
+                courierContainer.innerHTML = `<div class="text-red-600 font-semibold p-2">Error loading rates: ${escapeHtml(err.message)}</div>`;
+                checkCouriersSelected();
+            });
+        }
     }
-    const dp = document.getElementById('delivery_partner_display');
-    if (dp && radio.getAttribute('data-courier-name')) {
-        dp.value = radio.getAttribute('data-courier-name');
+
+    function renderCourierTiles(boxElement, courierContainer, tm, couriers, mode) {
+        const boxNo = boxElement.getAttribute('data-box-no') || '1';
+        const groupName = 'courier_pick_box_' + boxNo;
+
+        let tilesHtml = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full">';
+
+        couriers.forEach((courier, idx) => {
+            const isTopPick = idx === 0;
+            const currency = (courier.currency || 'INR').toUpperCase() === 'INR' ? '₹' : (courier.currency || '$');
+            const priceVal = parseFloat(courier.price || 0).toFixed(2);
+            const partnerCode = (courier.partner_code || 'shiprocket').toLowerCase();
+            const rating = courier.rating ? (courier.rating + '/5') : 'N/A';
+            const etd = courier.etd || 'N/A';
+            const etdShort = (etd === 'N/A' || etd === '' || etd == null) ? '—' : String(etd);
+
+            let providerBadge = '<span class="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800 border border-violet-200">Shiprocket</span>';
+            if (partnerCode === 'delhivery') {
+                providerBadge = '<span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800 border border-red-200">Delhivery</span>';
+            } else if (partnerCode === 'bluedart') {
+                providerBadge = '<span class="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-900 border border-sky-200">Blue Dart</span>';
+            } else if (partnerCode === 'aramex') {
+                providerBadge = '<span class="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-900 border border-orange-200">Aramex</span>';
+            }
+
+            tilesHtml += `
+                <label class="relative flex flex-col justify-between p-3.5 rounded-xl border-2 border-gray-200 bg-white cursor-pointer transition ${tm.courierTileHover} ${tm.courierTileChecked}">
+                    ${isTopPick ? `<span class="absolute -top-2.5 right-3 ${tm.courierTopPick} text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">Cheapest</span>` : ''}
+                    <div>
+                        <div class="flex items-center justify-between gap-2 mb-1.5">
+                            <div class="flex items-center gap-2">
+                                <input type="radio" name="${groupName}" value="${escapeHtml(courier.id || idx)}" ${idx === 0 ? 'checked' : ''}
+                                       class="courier-radio-input ${tm.courierRadio}"
+                                       data-courier-name="${escapeHtml(courier.name)}"
+                                       data-partner-code="${escapeHtml(courier.partner_code || 'shiprocket')}"
+                                       data-partner-account-id="${escapeHtml(courier.partner_account_id || '')}"
+                                       data-product-group="${escapeHtml(courier.product_group || '')}"
+                                       data-product-type="${escapeHtml(courier.product_type || '')}"
+                                       data-courier-etd="${escapeHtml(courier.etd || '')}"/>
+                                <span class="font-bold text-gray-900 text-xs">${escapeHtml(courier.name)}</span>
+                            </div>
+                            ${providerBadge}
+                        </div>
+                        <div class="mt-2.5 flex flex-wrap gap-1.5">
+                            <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                                <span class="text-slate-400">ETD</span> ${escapeHtml(etdShort)}
+                            </span>
+                            <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900 border border-amber-100">
+                                <span class="text-amber-500 text-[11px]">★</span> ${escapeHtml(rating)}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-right border-t border-gray-100 pt-2">
+                        <span class="text-base font-extrabold ${tm.courierPrice}">${currency} ${priceVal}</span>
+                    </div>
+                </label>
+            `;
+        });
+
+        tilesHtml += '</div>';
+        courierContainer.innerHTML = tilesHtml;
+
+        // Bind radio change listeners
+        courierContainer.querySelectorAll('input[type="radio"]').forEach(radio => {
+            radio.addEventListener('change', function () {
+                updateBoxCourierData(boxElement, this);
+                checkCouriersSelected();
+            });
+        });
+
+        // Set initial selected courier data
+        const initialChecked = courierContainer.querySelector('input[type="radio"]:checked');
+        if (initialChecked) {
+            updateBoxCourierData(boxElement, initialChecked);
+        }
+
+        checkCouriersSelected();
     }
-}
 
-function fetchCouriersForBox(boxSection) {
-    const boxNo = boxSection.getAttribute('data-box-no');
-    const container = document.getElementById('courier-container-' + boxNo);
-    const orderNumber = boxSection.getAttribute('data-order-number') || '';
-    const lengthIn = parseFloat(boxSection.querySelector('.box-length')?.value) || 0;
-    const widthIn = parseFloat(boxSection.querySelector('.box-width')?.value) || 0;
-    const heightIn = parseFloat(boxSection.querySelector('.box-height')?.value) || 0;
-    const weight = parseFloat(boxSection.querySelector('.box-actual-weight')?.value) || 0;
+    function updateBoxCourierData(boxElement, radio) {
+        if (!boxElement || !radio) return;
+        boxElement.dataset.partnerCode = radio.getAttribute('data-partner-code') || 'shiprocket';
+        boxElement.dataset.partnerAccountId = radio.getAttribute('data-partner-account-id') || '';
+        boxElement.dataset.productGroup = radio.getAttribute('data-product-group') || '';
+        boxElement.dataset.productType = radio.getAttribute('data-product-type') || '';
+        boxElement.dataset.courierName = radio.getAttribute('data-courier-name') || '';
+        boxElement.dataset.courierEtd = radio.getAttribute('data-courier-etd') || '';
+        boxElement.dataset.courierId = radio.value || '';
+    }
 
-    if (!container || !orderNumber || weight <= 0 || lengthIn <= 0 || widthIn <= 0 || heightIn <= 0) {
+    function checkCouriersSelected() {
+        const submitBtn = document.getElementById('singleDispatchSubmitBtn');
+        const bdExcelBtn = document.getElementById('downloadBlueDartExcelBtn');
+        const bdHint = document.getElementById('bluedartExcelExportHint');
+
+        if (!submitBtn) return;
+
+        const boxes = container.querySelectorAll('.bulk-dispatch-box');
+        let allSelected = true;
+        let isBlueDartSelected = false;
+
+        boxes.forEach(box => {
+            const checkedRadio = box.querySelector('.available-courier-container input[type="radio"]:checked');
+            if (!checkedRadio) {
+                allSelected = false;
+            } else if (checkedRadio.getAttribute('data-partner-code') === 'bluedart') {
+                isBlueDartSelected = true;
+            }
+        });
+
+        submitBtn.disabled = !allSelected;
+
+        if (isBlueDartSelected) {
+            if (bdExcelBtn) bdExcelBtn.classList.remove('hidden');
+            if (bdHint) bdHint.classList.remove('hidden');
+        } else {
+            if (bdExcelBtn) bdExcelBtn.classList.add('hidden');
+            if (bdHint) bdHint.classList.add('hidden');
+        }
+    }
+
+    // Single Dispatch Form Submit
+    const submitBtn = document.getElementById('singleDispatchSubmitBtn');
+    if (submitBtn) {
+        submitBtn.addEventListener('click', function () {
+            if (this.disabled) return;
+
+            const boxes = container.querySelectorAll('.bulk-dispatch-box');
+            const boxPayloads = [];
+
+            boxes.forEach((boxEl, idx) => {
+                const bNo = idx + 1;
+                const weight = parseFloat(boxEl.querySelector('.weight-input')?.value) || 0.5;
+                const sizeSelect = boxEl.querySelector('.BoxSize');
+                let length = 22, width = 17, height = 5;
+
+                if (sizeSelect && sizeSelect.value === 'CUSTOM') {
+                    length = parseFloat(boxEl.dataset.customLength) || 22;
+                    width = parseFloat(boxEl.dataset.customWidth) || 17;
+                    height = parseFloat(boxEl.dataset.customHeight) || 5;
+                } else if (sizeSelect && sizeSelect.selectedIndex >= 0) {
+                    const opt = sizeSelect.options[sizeSelect.selectedIndex];
+                    length = parseFloat(opt.getAttribute('data-length')) || 22;
+                    width = parseFloat(opt.getAttribute('data-width')) || 17;
+                    height = parseFloat(opt.getAttribute('data-height')) || 5;
+                }
+
+                const pickupLocation = boxEl.querySelector('.pickup-location-select')?.value || 'Head Off';
+                const checkedRadio = boxEl.querySelector('.available-courier-container input[type="radio"]:checked');
+
+                const itemIds = [];
+                boxEl.querySelectorAll('.item-row').forEach(r => {
+                    const id = r.getAttribute('data-item-id');
+                    if (id) itemIds.push(id);
+                });
+
+                boxPayloads.push({
+                    box_no: bNo,
+                    box_size: sizeSelect?.value || 'R-1',
+                    length: length,
+                    width: width,
+                    height: height,
+                    weight: weight,
+                    items: itemIds,
+                    partner_code: checkedRadio ? checkedRadio.getAttribute('data-partner-code') : 'shiprocket',
+                    partner_account_id: checkedRadio ? checkedRadio.getAttribute('data-partner-account-id') : '',
+                    courier_id: checkedRadio ? checkedRadio.value : '',
+                    courier_name: checkedRadio ? checkedRadio.getAttribute('data-courier-name') : '',
+                    courier_etd: checkedRadio ? checkedRadio.getAttribute('data-courier-etd') : '',
+                    product_group: checkedRadio ? checkedRadio.getAttribute('data-product-group') : '',
+                    product_type: checkedRadio ? checkedRadio.getAttribute('data-product-type') : '',
+                    pickup_location: pickupLocation
+                });
+            });
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<span>⌛</span> <span>Processing Dispatch...</span>`;
+
+            fetch('?page=dispatch&action=create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    invoice_id: payload.invoice_id,
+                    boxes: boxPayloads
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showPosModalMessage('Success', 'Dispatch processed successfully!', 'success');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1200);
+                } else {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = `<span>🚚</span> <span>Confirm &amp; Process Dispatch</span>`;
+                    showPosModalMessage('Dispatch Failed', data.message || 'Failed to process dispatch.', 'error');
+                }
+            })
+            .catch(err => {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<span>🚚</span> <span>Confirm &amp; Process Dispatch</span>`;
+                showPosModalMessage('Error', 'Network or server error: ' + err.message, 'error');
+            });
+        });
+    }
+
+    // Initialize Single Dispatch Card
+    renderOrderCard();
+})();
+
+function generateEInvoice(invoiceId, btn) {
+    if (!invoiceId) {
+        showPosMessageModal({
+            title: 'Error',
+            message: 'Invalid Invoice ID.',
+            tone: 'error'
+        });
         return;
     }
 
-    container.innerHTML = '<div class="text-gray-500 py-2"><span class="animate-pulse">Loading Aramex rates…</span></div>';
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span>⌛</span> <span>Generating E-Invoice...</span>`;
+    }
 
-    const payload = {
-        order_number: orderNumber,
-        length: Math.round(lengthIn * 2.54 * 100) / 100,
-        breadth: Math.round(widthIn * 2.54 * 100) / 100,
-        height: Math.round(heightIn * 2.54 * 100) / 100,
-        weight: weight,
-        cod: 0,
-        pickup_location: document.querySelector('[name="pickup_location"]')?.value || 'Head Off'
-    };
-
-    fetch('?page=dispatch&action=getCourierServiceability', {
+    fetch('?page=invoices&action=regenerate_irn', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-        body: JSON.stringify(payload)
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ invoice_id: invoiceId })
     })
     .then(r => r.json())
     .then(data => {
-        if (!data.success || !data.couriers || !data.couriers.length) {
-            container.innerHTML = '<div class="text-red-600">' + escapeHtml(data.message || 'No Aramex rates returned.') + '</div>';
-            return;
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
         }
-        const groupName = 'courier_pick_box_' + boxNo;
-        let html = '<div class="flex flex-wrap gap-3">';
-        data.couriers.forEach((courier, idx) => {
-            const currency = (courier.currency || 'USD').toUpperCase();
-            const price = courier.price != null ? (currency + ' ' + parseFloat(courier.price).toFixed(2)) : 'N/A';
-            const checked = idx === 0 ? ' checked' : '';
-            html += '<label class="relative flex w-full sm:w-56 flex-col rounded-xl border-2 border-gray-200 bg-white p-3 pl-9 shadow-sm cursor-pointer hover:border-indigo-300">' +
-                '<input type="radio" name="' + groupName + '" class="courier-tile-radio absolute left-2.5 top-3.5"' + checked +
-                ' data-courier-name="' + escapeHtml(courier.name) + '"' +
-                ' data-courier-etd="' + escapeHtml((courier.etd && courier.etd !== 'N/A') ? courier.etd : '') + '"' +
-                ' data-partner-code="' + escapeHtml(courier.partner_code) + '"' +
-                ' data-product-group="' + escapeHtml(courier.product_group) + '"' +
-                ' data-product-type="' + escapeHtml(courier.product_type) + '"' +
-                ' data-partner-account-id="' + escapeHtml(String(courier.partner_account_id || '')) + '">' +
-                '<p class="text-sm font-semibold text-gray-900">' + escapeHtml(courier.name) + '</p>' +
-                '<p class="text-lg font-bold text-indigo-700 mt-1">' + escapeHtml(price) + '</p>' +
-                '<p class="text-xs text-gray-500 mt-1">ETD: ' + escapeHtml(courier.etd || 'N/A') + '</p></label>';
-        });
-        html += '</div>';
-        container.innerHTML = html;
-        const selected = container.querySelector('.courier-tile-radio:checked') || container.querySelector('.courier-tile-radio');
-        if (selected) syncCourierSelection(boxSection, selected);
-        container.querySelectorAll('.courier-tile-radio').forEach(radio => {
-            radio.addEventListener('change', () => syncCourierSelection(boxSection, radio));
-        });
+        if (data.success) {
+            if (typeof window.showPosMessageModal === 'function') {
+                window.showPosMessageModal({
+                    title: 'E-Invoice Success',
+                    message: data.message || 'E-Invoice (IRN) generated successfully!',
+                    tone: 'success'
+                });
+            } else {
+                alert(data.message || 'E-Invoice (IRN) generated successfully!');
+            }
+        } else {
+            if (typeof window.showPosMessageModal === 'function') {
+                window.showPosMessageModal({
+                    title: 'E-Invoice Generation Failed',
+                    message: data.message || 'Failed to generate E-Invoice.',
+                    tone: 'error'
+                });
+            } else {
+                alert(data.message || 'Failed to generate E-Invoice.');
+            }
+        }
     })
     .catch(err => {
-        container.innerHTML = '<div class="text-red-600">' + escapeHtml(err.message || 'Failed to load couriers') + '</div>';
-    });
-}
-</script>
-
-<script>
-function submitDispatchForm(event) {
-    event.preventDefault();
-    
-    const form = document.getElementById('dispatchForm');
-    const submitBtn = event.target;
-    const originalBtnText = submitBtn.innerHTML;
-    //validation
-    const boxSections = document.querySelectorAll('.box-section');
-    let isValid = true;
-    boxSections.forEach(section => {
-        const length = parseFloat(section.querySelector('.box-length').value) || 0;
-        const width = parseFloat(section.querySelector('.box-width').value) || 0;
-        const height = parseFloat(section.querySelector('.box-height').value) || 0;
-        const actualWeight = parseFloat(section.querySelector('.box-actual-weight').value) || 1;
-        
-        if (length <= 0 || width <= 0 || height <= 0 || actualWeight <= 0) {
-            isValid = false;
-            showAlert('All box dimensions and weights must be greater than zero.','error');
-            return false; // Stop processing further sections
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
         }
-    });
-    if (!isValid) {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = originalBtnText;
-        return; // Stop form submission if validation fails
-    }
-
-    if (DISPATCH_IS_INTERNATIONAL) {
-        let missingCourier = false;
-        boxSections.forEach(section => {
-            const partnerCode = section.querySelector('.box-partner-code')?.value || '';
-            if (!partnerCode) {
-                missingCourier = true;
-            }
-        });
-        if (missingCourier) {
-            showAlert('Select an Aramex courier service for each box before dispatch.', 'error');
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalBtnText;
-            return;
-        }
-    }
-
-    // Disable button and show loading state
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="animate-spin">⏳</span> Processing...';
-    
-    // Prepare form data
-    const formData = new FormData(form);
-    
-    // Make AJAX request
-    fetch('<?php echo base_url('?page=dispatch&action=create'); ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .catch(() => {
-        // If JSON parsing fails, assume form submission (redirect case)
-       // return { status: 'redirect' };
-       showAlert('Unexpected response from server. Please try again.','error');
-    })
-    .then(data => {
-        if (data.status === 'success') {
-            // Show success message
-            showAlert('' + (data.message ? ' ' + data.message : ' Dispatch created successfully!'),'success');
-            // handle nested dispatches structure: { awb: {...}, labelUrl: {...}, ids: {...} }
-            if (data.dispatches) {
-                const ids = data.dispatches.ids || {};
-                const labelUrls = data.dispatches.labelUrl || {};
-                const awbs = data.dispatches.awb || {};
-                Object.keys(ids).forEach(boxNo => {
-                    const labelUrl = labelUrls[boxNo];
-                    if (labelUrl) {
-                        const labelFrame = document.getElementById('label-frame-' + boxNo);
-                        if (labelFrame) {
-                            labelFrame.src = 'https://docs.google.com/gview?url=' + encodeURIComponent(labelUrl) + '&embedded=true';
-                            
-                            // Create print button
-                            const container = labelFrame.parentNode;
-                            let printBtn = document.getElementById('print-btn-' + boxNo);
-                            if (!printBtn) {
-                                printBtn = document.createElement('button');
-                                printBtn.id = 'print-btn-' + boxNo;
-                                printBtn.type = 'button';
-                                printBtn.className = 'mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 print-label-btn';
-                                printBtn.innerHTML = '🖨️ Print Label';
-                                printBtn.onclick = function(e) {
-                                    e.preventDefault();
-                                    const printWindow = window.open('https://docs.google.com/gview?url=' + encodeURIComponent(labelUrl), '_blank');
-                                    printWindow.onload = function() {
-                                        setTimeout(() => printWindow.print(), 2000);
-                                    };
-                                };
-                                container.appendChild(printBtn);
-                            }
-                            
-                            labelFrame.style.display = 'block';
-                        }
-                    }
-                    const awbCode = awbs[boxNo];
-                    const container = document.getElementById('labels-container-' + boxNo);
-                    if (awbCode) {                       
-                        if (container) {
-                            let awbEl = document.getElementById('awb-' + boxNo);
-                            if (!awbEl) {
-                                awbEl = document.createElement('p');
-                                awbEl.id = 'awb-' + boxNo;
-                                awbEl.className = 'mt-2 text-sm text-gray-700';
-                                container.appendChild(awbEl);
-                            }
-                            awbEl.textContent = 'AWB: ' + awbCode;
-                        }
-                    }
-                    //awb_assign_status and label_created is 0 then show warning message and link to retry api call for that box
-                      const awbAssignStatus = data.dispatches.awb_assign_status ? data.dispatches.awb_assign_status[boxNo] : null;
-                      const labelCreated = data.dispatches.label_created ? data.dispatches.label_created[boxNo] : null;
-                      if (awbAssignStatus === 0 || labelCreated === 0) {
-                          showAlert('AWB assignment or label creation failed for Box ' + boxNo + '. Please retry.','error');
-                          // Optionally, you can add a retry button here that calls an API to retry the failed step for this box
-                      
-                      //button to retry failed api calls for this box
-                      const retryBtn = document.createElement('button');
-                      retryBtn.type = 'button';
-                      retryBtn.className = 'mt-2 px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700';
-                      retryBtn.innerHTML = 'Retry Dispatch';
-                      retryBtn.onclick = function(e) {
-                          e.preventDefault();
-                          // Call API to retry failed dispatch for this box
-                          fetch('<?php echo base_url('?page=dispatch&action=retry_dispatch'); ?>', {
-                              method: 'POST',
-                              headers: {'Content-Type': 'application/json'},
-                              body: JSON.stringify({
-                                  invoice_id: formData.get('invoice_id'),
-                                  box_no: boxNo,
-                                  dispatch_id: ids[boxNo] || null
-                              })
-                          })
-                          .then(response => response.json())
-                          .then(retryData => {
-                              if (retryData.status === 'success') {
-                                  showAlert('Retry successful for Box ' + boxNo, 'success');
-                                  //upadte label and awb on page without refreshing
-                                  if (retryData.labelUrl) {
-                                      const labelFrame = document.getElementById('label-frame-' + boxNo);
-                                      if (labelFrame) {
-                                          labelFrame.src = 'https://docs.google.com/gview?url=' + encodeURIComponent(retryData.labelUrl) + '&embedded=true';
-                                      }
-                                  }
-                              } else {
-                                  showAlert('Retry failed for Box ' + boxNo + ': ' + (retryData.message || ''), 'error');
-                              }
-                          })
-                          .catch(error => {
-                              console.error('Error retrying dispatch:', error);
-                              showAlert('Error retrying dispatch for Box ' + boxNo, 'error');
-                          });
-                      };
-                      container.appendChild(retryBtn);
-                    }
-                });
-            }
-            const invoiceContainer = document.getElementById('invoice-container');
-            if (invoiceContainer) {
-                invoiceContainer.style.display = 'block';
-                const invoiceUrl = '<?php echo base_url('?page=invoices&action=generate_pdf'); ?>' + '&invoice_id=' + formData.get('invoice_id') + '&dispatch=true';
-                // Generate and load invoice PDF
-                setTimeout(() => {                
-                    fetch('<?php echo base_url('?page=invoices&action=generate_pdf'); ?>', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({invoice_id: formData.get('invoice_id')})
-                    })
-                    .then(response => response.blob())
-                    .then(blob => {
-                        const url = window.URL.createObjectURL(blob);                       
-                
-                        // Create invoice print button
-                        let invoicePrintBtn = document.getElementById('invoice-print-btn');
-                        if (!invoicePrintBtn) {
-                            invoicePrintBtn = document.createElement('button');
-                            invoicePrintBtn.id = 'invoice-print-btn';
-                            invoicePrintBtn.type = 'button';
-                            invoicePrintBtn.className = 'mt-3 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700';
-                            invoicePrintBtn.innerHTML = '🖨️ Print Invoice';
-                            invoicePrintBtn.onclick = function(e) {
-                                e.preventDefault();
-                                const printWindow = window.open(url, '_blank');
-                                printWindow.onload = function() {
-                                    setTimeout(() => printWindow.print(), 2000);
-                                };
-                            };
-                            invoiceContainer.appendChild(invoicePrintBtn);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error generating invoice PDF:', error);
-                        showAlert('Failed to generate invoice PDF','error');
-                    });
-                }, 1000);
-                
-            }     
-             
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = originalBtnText;
-        submitBtn.style.display = 'none'; // Hide the dispatch button after successful submission
-        } else if (data.status === 'error') {
-            showAlert(data.message || 'An error occurred','error');
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalBtnText;
-        } else if (data.status === 'redirect') {
-            showAlert('Dispatch created successfully! Redirecting...','success');
-            // Handle redirect response
-          //  window.location.href = data.redirect || '<?php //echo base_url("?page=dispatch"); ?>';
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showAlert('Failed to submit form','error');
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = originalBtnText;
-    });
-}
-
-
-// Calculate weight on page load
-document.querySelectorAll('.box-section').forEach(section => {
-    calculateWeight(section.querySelector('input'));
-});
-//print-label-btn
-
-// Function to print label
-function printLabel(labelUrl) {
-    const printWindow = window.open('https://docs.google.com/gview?url=' + encodeURIComponent(labelUrl) + '&embedded=true', '_blank');
-    printWindow.onload = function() {
-        setTimeout(() => printWindow.print(), 2000);
-    };
-}
-function genLabel(dispatchId) {
-    const retryLabelBtn = document.getElementById('retryLabelBtn');
-    retryLabelBtn.disabled = true;
-    retryLabelBtn.innerHTML = '<span class="animate-spin">⏳</span> Regenerating...';
-    // Call API to regenerate label for this dispatch
-    fetch('<?php echo base_url('?page=dispatch&action=retry_dispatch'); ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            dispatch_id: dispatchId
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success === true) {
-            showAlert('Label regeneration successful!', 'success');
-            // Update label URL on page if provided
-            location.reload(); // Reload the page to reflect updated label and AWB info
+        if (typeof window.showPosMessageModal === 'function') {
+            window.showPosMessageModal({
+                title: 'Error',
+                message: 'Failed to trigger E-Invoice generation: ' + err.message,
+                tone: 'error'
+            });
         } else {
-            showAlert('Label regeneration failed: ' + (data.message || ''), 'error');
+            alert('Failed to trigger E-Invoice generation: ' + err.message);
         }
-        retryLabelBtn.disabled = false;
-        retryLabelBtn.innerHTML = 'Retry Label Generation';
-    })
-    .catch(error => {
-        console.error('Error regenerating label:', error);
-        showAlert('Error regenerating label', 'error');
     });
 }
-
 </script>

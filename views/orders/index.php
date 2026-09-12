@@ -977,7 +977,24 @@
 
                                                 <span class="heading-typography ">Order ID</span>
                                                 <p class="">: <span class="data-typography inline-flex items-center gap-1 flex-wrap">
+                                                    <?php
+                                                    $orderNumberVal = trim((string)($order['order_number'] ?? ''));
+                                                    $orderNumberFilterUrl = $orderNumberVal !== ''
+                                                        ? base_url('?page=orders&action=list&order_number=' . rawurlencode($orderNumberVal))
+                                                        : '';
+                                                    $isOrderNumberFilterActive = $orderNumberVal !== ''
+                                                        && trim((string)($_GET['order_number'] ?? '')) === $orderNumberVal;
+                                                    ?>
                                                     <a href="#" id="order-id-<?= $order['order_id'] ?>" class="order-detail-link text-blue-600 hover:underline" data-order='<?= htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8') ?>'><?= $order['order_number'] ?></a>
+                                                    <?php if ($orderNumberFilterUrl !== ''): ?>
+                                                    <a href="<?= htmlspecialchars($orderNumberFilterUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                                       class="inline-flex items-center justify-center p-0.5 rounded border <?= $isOrderNumberFilterActive ? 'text-amber-700 border-amber-300 bg-amber-50' : 'text-gray-500 border-gray-200 bg-gray-50 hover:text-amber-700 hover:border-amber-300 hover:bg-amber-50' ?>"
+                                                       title="<?= $isOrderNumberFilterActive ? 'Currently filtered by this order number' : 'Filter list by this order number' ?>"
+                                                       aria-label="Filter list by order number <?= htmlspecialchars($orderNumberVal, ENT_QUOTES, 'UTF-8') ?>"
+                                                       onclick="event.stopPropagation();">
+                                                        <i class="fas fa-search text-xs" aria-hidden="true"></i>
+                                                    </a>
+                                                    <?php endif; ?>
                                                     <button type="button"
                                                             class="refresh-vendor-order-btn text-orange-600 hover:text-orange-800 p-0.5 rounded border border-orange-200 bg-orange-50"
                                                             title="Refresh all lines for this order from Exotic"
