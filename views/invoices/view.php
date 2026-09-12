@@ -31,9 +31,41 @@ $isExport = ($currency !== 'INR') || (!empty($orderInfo['country']) && strtouppe
 $einvoiceInputUrl = base_url('?page=invoices&action=einvoice-input&id=' . $invoiceId);
 $ewaybillInputUrl = base_url('?page=invoices&action=ewaybill-input&id=' . $invoiceId);
 $invoiceListUrl = base_url('?page=invoices&action=list');
+
+$flashNotice = $_SESSION['flash_notice_message'] ?? null;
+if (isset($_SESSION['flash_notice_message'])) {
+    unset($_SESSION['flash_notice_message']);
+}
+if ($flashNotice === null && isset($_GET['already_created']) && $_GET['already_created'] == '1') {
+    $flashNotice = 'Invoice already created for this order.';
+}
 ?>
 
 <div class="mx-auto max-w-[1300px] space-y-6 px-3 py-6 md:px-6 font-sans text-slate-800">
+
+    <?php if ($flashNotice): ?>
+        <div class="rounded-2xl border border-sky-200 bg-sky-50 p-5 shadow-sm">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-start gap-3">
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-800 font-bold">
+                        <i class="fas fa-info-circle text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-sky-950">Invoice Already Created</h3>
+                        <p class="text-sm text-sky-800 mt-0.5"><?= $h($flashNotice) ?></p>
+                    </div>
+                </div>
+                <?php if (!$isIrnGenerated): ?>
+                    <div class="shrink-0">
+                        <a href="<?= $h($einvoiceInputUrl) ?>" class="inline-flex items-center gap-2 rounded-xl bg-orange-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-orange-700 shadow-md transition">
+                            <i class="fas fa-file-signature"></i>
+                            <span>Generate IRN</span>
+                        </a>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php endif; ?>
 
     <!-- Top Action Bar -->
     <div class="flex flex-col gap-4 rounded-2xl bg-white p-5 shadow-[0px_10px_15px_-3px_#0000001A] md:flex-row md:items-center md:justify-between">
