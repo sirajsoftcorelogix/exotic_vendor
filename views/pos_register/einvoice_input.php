@@ -415,7 +415,18 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
           body: formData,
           headers: { 'X-Requested-With': 'XMLHttpRequest' }
         });
-        const data = await res.json();
+
+        let data;
+        const text = await res.text();
+        try {
+          data = JSON.parse(text);
+        } catch (jsonErr) {
+          data = {
+            success: false,
+            message: 'Server returned a non-JSON response.',
+            error_details: text || ('HTTP ' + res.status + ' ' + res.statusText)
+          };
+        }
 
         if (data.success) {
           resultContainer.className = 'bg-emerald-50 border border-emerald-300 rounded-2xl p-6 mb-6';
@@ -464,8 +475,17 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
         }
       } catch (err) {
         resultContainer.className = 'bg-rose-50 border border-rose-300 rounded-2xl p-6 mb-6';
+        const errMsg = err && err.message ? err.message : String(err);
         resultContainer.innerHTML = `
-          <div class="text-xs text-rose-800 font-semibold">Network error during E-Invoice generation. Please check server logs and try again.</div>
+          <div class="flex items-start gap-3">
+            <div class="p-2 bg-rose-100 text-rose-700 rounded-lg shrink-0">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-rose-900">Request Error</h3>
+              <p class="text-xs text-rose-700 mt-1">${escapeResultHtml(errMsg)}</p>
+            </div>
+          </div>
         `;
         console.error('Error generating E-Invoice:', err);
         resultContainer.classList.remove('hidden');
