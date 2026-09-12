@@ -295,10 +295,12 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
         <a href="<?= $h($backUrl) ?>" class="px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold text-xs hover:bg-slate-100 transition">
           Cancel &amp; Return to Receipt
         </a>
-        <button type="submit" id="submitBtn" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 text-white font-bold text-sm shadow-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
-          <span id="submitBtnText">Submit &amp; Generate E-Way Bill</span>
-        </button>
+        <?php if (empty($existingEwb)): ?>
+          <button type="submit" id="submitBtn" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 text-white font-bold text-sm shadow-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+            <span id="submitBtnText">Submit &amp; Generate E-Way Bill</span>
+          </button>
+        <?php endif; ?>
       </div>
 
     </form>
@@ -401,6 +403,9 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
         }
 
         if (data.success) {
+          if (submitBtn) {
+            submitBtn.style.display = 'none';
+          }
           resultContainer.className = 'bg-emerald-50 border border-emerald-300 rounded-2xl p-6 mb-6';
           resultContainer.innerHTML = `
             <div class="flex items-start gap-3">
