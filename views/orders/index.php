@@ -749,6 +749,10 @@
             <span onclick="callImportedUpdate()" title="Click to update status" class="menu-button float-right text-blue-500 hover:bg-blue-200 font-semibold mr-2 cursor-pointer ">
                 <i class="fas fa-edit p-1 bg-white border border-blue-500"></i>
             </span>
+            <!-- sync non-terminal order statuses -->
+            <span onclick="openSyncOrderStatusModal()" title="Sync Non-Terminal Order Statuses (vendor-api)" class="menu-button float-right text-emerald-600 hover:bg-emerald-200 font-semibold mr-2 cursor-pointer ">
+                <i class="fas fa-sync-alt p-1 bg-white border border-emerald-600"></i>
+            </span>
                 </div>
             </div>
             <!-- Tabs -->
@@ -1676,6 +1680,76 @@
                 <div class="flex justify-end space-x-4 mt-4">
                     <button type="button" onclick="closeImportUpdatePopup()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<!-- Sync Non-Terminal Order Statuses Modal -->
+<div id="syncOrderStatusModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50 p-4" onclick="closeSyncOrderStatusModal(event)">
+    <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full relative flex flex-col overflow-hidden" onclick="event.stopPropagation();">
+        <div class="bg-emerald-600 text-white px-6 py-4 flex items-center justify-between">
+            <h3 class="text-lg font-bold flex items-center gap-2">
+                <i class="fas fa-sync-alt"></i> Sync Order Statuses from Exotic Vendor API
+            </h3>
+            <button onclick="closeSyncOrderStatusModal()" class="text-white hover:bg-emerald-700 w-8 h-8 rounded-full flex items-center justify-center transition">✕</button>
+        </div>
+        <div class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+            <p class="text-xs text-gray-600">
+                Queries vendor API (<code class="bg-gray-100 px-1 py-0.5 rounded text-emerald-800 font-mono text-[11px]">vendor-api/order/fetch</code> with <code class="bg-gray-100 px-1 py-0.5 rounded text-emerald-800 font-mono text-[11px]">only_status=1</code>) for non-terminal orders (status NOT IN Cancelled, Returned, Shipped), ordered by <strong class="text-gray-800">order_date ASC</strong>.
+            </p>
+            <form id="syncOrderStatusForm" onsubmit="handleSyncOrderStatusSubmit(event)" class="space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="syncLimit" class="block text-xs font-bold text-gray-700 mb-1">Max Orders to Check:</label>
+                        <select id="syncLimit" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            <option value="50">50 orders</option>
+                            <option value="100">100 orders</option>
+                            <option value="250" selected>250 orders</option>
+                            <option value="500">500 orders</option>
+                            <option value="1000">1000 orders</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="syncBatchSize" class="block text-xs font-bold text-gray-700 mb-1">API Batch Size:</label>
+                        <select id="syncBatchSize" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            <option value="20">20 orders / API request</option>
+                            <option value="50" selected>50 orders / API request</option>
+                            <option value="100">100 orders / API request</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="syncSpecificOrder" class="block text-xs font-bold text-gray-700 mb-1">Specific Order Number(s) (Optional):</label>
+                    <input type="text" id="syncSpecificOrder" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="e.g. 3114463, 3114147 (leave blank to check candidate queue)">
+                </div>
+
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" id="syncDryRun" class="w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500">
+                    <label for="syncDryRun" class="text-xs font-bold text-gray-700">Dry Run / Preview Mode (Simulate without database changes)</label>
+                </div>
+
+                <div id="syncProgressContainer" class="hidden space-y-2 pt-2 border-t">
+                    <div class="flex items-center justify-between text-xs font-semibold text-gray-700">
+                        <span id="syncProgressLabel">Syncing status...</span>
+                        <span id="syncProgressPercent">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                        <div id="syncProgressBar" class="bg-emerald-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div id="syncResultContainer" class="hidden space-y-2 pt-2 border-t">
+                    <div id="syncResultBadges" class="flex flex-wrap gap-2 text-xs"></div>
+                    <div id="syncResultDetails" class="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50 text-xs space-y-1 font-mono"></div>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-3 border-t">
+                    <button type="button" onclick="closeSyncOrderStatusModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 text-xs font-semibold">Close</button>
+                    <button type="submit" id="syncStartBtn" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow flex items-center gap-2 transition">
+                        <i class="fas fa-sync-alt"></i> Run Status Sync
+                    </button>
                 </div>
             </form>
         </div>
@@ -2801,6 +2875,95 @@
     function closeImportUpdatePopup(event) {
         if (event && event.target !== event.currentTarget) return;
         document.getElementById('importUpdatePopup').classList.add('hidden');
+    }
+
+    function openSyncOrderStatusModal() {
+        document.getElementById('syncOrderStatusModal').classList.remove('hidden');
+        document.getElementById('syncResultContainer').classList.add('hidden');
+        document.getElementById('syncProgressContainer').classList.add('hidden');
+        document.getElementById('syncResultDetails').innerHTML = '';
+    }
+
+    function closeSyncOrderStatusModal(event) {
+        if (event && event.target !== event.currentTarget) return;
+        document.getElementById('syncOrderStatusModal').classList.add('hidden');
+    }
+
+    async function handleSyncOrderStatusSubmit(e) {
+        e.preventDefault();
+        const btn = document.getElementById('syncStartBtn');
+        const dryRun = document.getElementById('syncDryRun').checked;
+        const limit = document.getElementById('syncLimit').value;
+        const batchSize = document.getElementById('syncBatchSize').value;
+        const specificOrder = document.getElementById('syncSpecificOrder').value.trim();
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+
+        const progressContainer = document.getElementById('syncProgressContainer');
+        const progressBar = document.getElementById('syncProgressBar');
+        const progressLabel = document.getElementById('syncProgressLabel');
+        const progressPercent = document.getElementById('syncProgressPercent');
+        const resultContainer = document.getElementById('syncResultContainer');
+        const resultBadges = document.getElementById('syncResultBadges');
+        const resultDetails = document.getElementById('syncResultDetails');
+
+        progressContainer.classList.remove('hidden');
+        resultContainer.classList.add('hidden');
+        progressBar.style.width = '30%';
+        progressPercent.textContent = '30%';
+        progressLabel.textContent = 'Contacting Exotic Vendor API...';
+
+        try {
+            const response = await fetch('index.php?page=orders&action=sync_order_statuses_ajax', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    dry_run: dryRun,
+                    limit: limit,
+                    batch_size: batchSize,
+                    order_id: specificOrder
+                })
+            });
+
+            const data = await response.json();
+            progressBar.style.width = '100%';
+            progressPercent.textContent = '100%';
+            progressLabel.textContent = 'Completed';
+
+            resultContainer.classList.remove('hidden');
+            if (data.success && data.summary) {
+                const s = data.summary;
+                const dryBadge = data.dry_run ? '<span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold">DRY-RUN</span>' : '';
+                resultBadges.innerHTML = `
+                    ${dryBadge}
+                    <span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold">Checked: ${s.checked_orders} orders</span>
+                    <span class="px-2 py-0.5 bg-green-100 text-green-800 rounded font-bold">Changed: ${s.updated_lines} line(s)</span>
+                    <span class="px-2 py-0.5 bg-gray-100 text-gray-800 rounded font-bold">Unchanged: ${s.unchanged_lines}</span>
+                    <span class="px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded font-bold">Skipped: ${s.skipped_lines}</span>
+                `;
+
+                if (s.details && s.details.length > 0) {
+                    let html = '';
+                    s.details.forEach(d => {
+                        html += `<div>• Order #${d.order_number} (${d.item_code}): <span class="text-red-600">${d.old_status}</span> ➔ <span class="text-green-600 font-bold">${d.new_status}</span></div>`;
+                    });
+                    resultDetails.innerHTML = html;
+                } else {
+                    resultDetails.innerHTML = '<div class="text-gray-500 italic">No order status changes detected. All orders are up to date!</div>';
+                }
+            } else {
+                resultBadges.innerHTML = `<span class="px-2 py-0.5 bg-red-100 text-red-800 rounded font-bold">Error: ${data.message || 'Sync failed'}</span>`;
+            }
+        } catch (err) {
+            progressBar.style.width = '100%';
+            progressLabel.textContent = 'Failed';
+            resultContainer.classList.remove('hidden');
+            resultBadges.innerHTML = `<span class="px-2 py-0.5 bg-red-100 text-red-800 rounded font-bold">Network/Server Error: ${err.message}</span>`;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync-alt"></i> Run Status Sync';
+        }
     }
 
     // Import Update form submission with AJAX

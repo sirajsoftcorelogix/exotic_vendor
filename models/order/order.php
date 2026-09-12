@@ -3331,4 +3331,275 @@ class Order
             'material' => $material,
         ];
     }
+
+    /**
+     * Get orders whose status is NOT in ('cancelled', 'returned', 'shipped'), ordered by order_date ASC.
+     *
+     * @param int $limit Maximum candidate orders to fetch
+     * @return array<int, array{order_number: string, order_date: string, min_id: int, statuses: string}>
+     */
+    public function getNonTerminalOrdersForStatusSync(int $limit = 500): array
+    {
+        $limit = max(1, min(10000, $limit));
+        $sql = "SELECT order_number, MIN(order_date) AS order_date, MIN(id) AS min_id, GROUP_CONCAT(DISTINCT status) AS statuses
+                FROM vp_orders
+                WHERE LOWER(TRIM(COALESCE(status, ''))) NOT IN ('cancelled', 'returned', 'shipped', 'return', 'cancelled_returned')
+                  AND LOWER(TRIM(COALESCE(status, ''))) NOT LIKE 'return%'
+                  AND order_number IS NOT NULL AND TRIM(order_number) != ''
+                GROUP BY order_number
+                ORDER BY MIN(order_date) ASC, MIN(id) ASC
+                LIMIT ?";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) {
+            return [];
+        }
+        $stmt->bind_param('i', $limit);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $rows = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $rows[] = $row;
+            }
+        }
+        $stmt->close();
+
+        return $rows;
+    }
+
+    /**
+     * Sync order statuses from Exotic India Vendor API in batches.
+     *
+     * @param array<string> $orderNumbers List of order numbers to sync
+     * @param bool $dryRun If true, simulate updates without writing to DB
+     * @param int $userId Performing user ID for vp_order_status_log
+     * @return array{
+     *   checked_orders: int,
+     *   updated_lines: int,
+     *   unchanged_lines: int,
+     *   skipped_lines: int,
+     *   details: list<array<string, mixed>>,
+     *   errors: list<string>
+     * }
+     */
+    public function syncOrderStatusFromVendorApiBatch(array $orderNumbers, bool $dryRun = false, int $userId = 0): array
+    {
+        $orderNumbers = array_values(array_unique(array_filter(array_map('trim', $orderNumbers))));
+        if (empty($orderNumbers)) {
+            return [
+                'checked_orders' => 0,
+                'updated_lines' => 0,
+                'unchanged_lines' => 0,
+                'skipped_lines' => 0,
+                'details' => [],
+                'errors' => ['No valid order numbers provided for sync.']
+            ];
+        }
+
+        $statusList = $this->adminOrderStatusList('true');
+        $url = 'https://www.exoticindia.com/vendor-api/order/fetch';
+        $headers = [
+            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
+            'x-adminapitest: 1',
+            'Content-Type: application/x-www-form-urlencoded',
+        ];
+
+        $postData = [
+            'makeRequestOf' => 'vendors-orderjson',
+            'orderid' => implode(',', $orderNumbers),
+            'only_status' => 1,
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => http_build_query($postData),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_CONNECTTIMEOUT => 15,
+            CURLOPT_TIMEOUT => 120,
+        ]);
+
+        $response = curl_exec($ch);
+        $errno = curl_errno($ch);
+        $errstr = curl_error($ch);
+        curl_close($ch);
+
+        if ($response === false || $errno !== 0) {
+            return [
+                'checked_orders' => count($orderNumbers),
+                'updated_lines' => 0,
+                'unchanged_lines' => 0,
+                'skipped_lines' => 0,
+                'details' => [],
+                'errors' => ["cURL Error ({$errno}): {$errstr}"]
+            ];
+        }
+
+        $json = json_decode((string)$response, true);
+        if (!is_array($json) || empty($json['orders'])) {
+            return [
+                'checked_orders' => count($orderNumbers),
+                'updated_lines' => 0,
+                'unchanged_lines' => 0,
+                'skipped_lines' => 0,
+                'details' => [],
+                'errors' => [is_array($json) ? 'No orders returned from vendor API.' : 'Invalid JSON response from vendor API.']
+            ];
+        }
+
+        require_once __DIR__ . '/../../integrations/exotic/Support/VendorOrderFetchParser.php';
+        $ordersList = VendorOrderFetchParser::normalizeOrdersList($json['orders']);
+
+        $checkedOrders = 0;
+        $updatedLines = 0;
+        $unchangedLines = 0;
+        $skippedLines = 0;
+        $details = [];
+        $errors = [];
+
+        foreach ($ordersList as $apiOrder) {
+            $orderId = trim((string)($apiOrder['orderid'] ?? ''));
+            if ($orderId === '') {
+                continue;
+            }
+            $checkedOrders++;
+
+            $cart = $apiOrder['cart'] ?? [];
+            if (!is_array($cart) || empty($cart)) {
+                $skippedLines++;
+                continue;
+            }
+
+            foreach ($cart as $item) {
+                $itemCode = trim((string)($item['itemcode'] ?? ''));
+                $sku = trim((string)($item['sku'] ?? ''));
+                $rawStatus = $item['order_status'] ?? $item['status'] ?? null;
+
+                if ($rawStatus === null || $rawStatus === '') {
+                    $skippedLines++;
+                    continue;
+                }
+
+                $newStatusSlug = '';
+                if (isset($statusList[$rawStatus])) {
+                    $newStatusSlug = $statusList[$rawStatus];
+                } elseif (is_string($rawStatus) && !is_numeric($rawStatus)) {
+                    $newStatusSlug = strtolower(trim($rawStatus));
+                }
+
+                if ($newStatusSlug === '') {
+                    $skippedLines++;
+                    continue;
+                }
+
+                // Find local order line(s)
+                $query = "SELECT * FROM vp_orders WHERE order_number = ?";
+                $types = "s";
+                $params = [$orderId];
+
+                if ($sku !== '') {
+                    $query .= " AND sku = ?";
+                    $types .= "s";
+                    $params[] = $sku;
+                } elseif ($itemCode !== '') {
+                    $query .= " AND item_code = ?";
+                    $types .= "s";
+                    $params[] = $itemCode;
+                }
+
+                $stmt = $this->db->prepare($query);
+                if (!$stmt) {
+                    $errors[] = "Prepare query failed for order {$orderId}: " . $this->db->error;
+                    continue;
+                }
+
+                $stmt->bind_param($types, ...$params);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                $localLines = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
+                $stmt->close();
+
+                if (empty($localLines)) {
+                    $skippedLines++;
+                    continue;
+                }
+
+                foreach ($localLines as $localLine) {
+                    $lineId = (int)$localLine['id'];
+                    $currentStatus = strtolower(trim((string)($localLine['status'] ?? '')));
+
+                    if ($currentStatus === strtolower(trim($newStatusSlug))) {
+                        $unchangedLines++;
+                        continue;
+                    }
+
+                    $lineDetail = [
+                        'line_id' => $lineId,
+                        'order_number' => $orderId,
+                        'item_code' => $localLine['item_code'] ?? '',
+                        'sku' => $localLine['sku'] ?? '',
+                        'old_status' => $currentStatus,
+                        'new_status' => $newStatusSlug,
+                        'updated' => !$dryRun,
+                    ];
+
+                    if (!$dryRun) {
+                        // Update status in vp_orders
+                        $now = date('Y-m-d H:i:s');
+                        $updStmt = $this->db->prepare("UPDATE vp_orders SET status = ?, updated_at = ?, update_flag = 1 WHERE id = ?");
+                        if ($updStmt) {
+                            $updStmt->bind_param('ssi', $newStatusSlug, $now, $lineId);
+                            $updStmt->execute();
+                            $updStmt->close();
+                        }
+
+                        // Log into vp_order_status_log
+                        $apiRespJson = json_encode([
+                            'source' => 'vendor_api_status_sync',
+                            'orderid' => $orderId,
+                            'itemcode' => $localLine['item_code'] ?? '',
+                            'raw_status' => $rawStatus,
+                            'new_status' => $newStatusSlug,
+                            'old_status' => $currentStatus,
+                        ], JSON_UNESCAPED_SLASHES);
+
+                        $logStmt = $this->db->prepare(
+                            "INSERT INTO vp_order_status_log (order_id, status, changed_by, api_response, change_date, created_on) VALUES (?, ?, ?, ?, NOW(), NOW())"
+                        );
+                        if ($logStmt) {
+                            $logStmt->bind_param('isis', $lineId, $newStatusSlug, $userId, $apiRespJson);
+                            $logStmt->execute();
+                            $logStmt->close();
+                        }
+
+                        // Stock / invoice restoration handling if status changed to cancelled/returned
+                        if (file_exists(__DIR__ . '/../../helpers/order_status_stock.php')) {
+                            require_once __DIR__ . '/../../helpers/order_status_stock.php';
+                            if (function_exists('order_handle_status_change_stock')) {
+                                $stockResult = order_handle_status_change_stock($this->db, $localLine, $newStatusSlug, $currentStatus);
+                                $lineDetail['stock_result'] = $stockResult;
+                            }
+                        }
+
+                        $updatedLines++;
+                    } else {
+                        $updatedLines++;
+                    }
+
+                    $details[] = $lineDetail;
+                }
+            }
+        }
+
+        return [
+            'checked_orders' => $checkedOrders,
+            'updated_lines' => $updatedLines,
+            'unchanged_lines' => $unchangedLines,
+            'skipped_lines' => $skippedLines,
+            'details' => $details,
+            'errors' => $errors
+        ];
+    }
 }
