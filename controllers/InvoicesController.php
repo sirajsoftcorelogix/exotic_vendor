@@ -319,19 +319,8 @@ class InvoicesController
         }
 
         $invoiceId = (int)($result['invoice_id'] ?? 0);
-        $irn = false;
-        $irnErrorMessage = '';
-        if ($isInternational && $invoiceId > 0) {
-            $irn = $this->generateAlankitIrnForInvoice($invoiceId);
-            if (!$irn) {
-                $internationalRecord = $invoiceModel->getInternationalInvoiceByInvoiceId($invoiceId);
-                $irnErrorMessage = $internationalRecord['irn_error_message'] ?? 'Failed to generate IRN';
-            }
-        }
 
         echo json_encode(array_merge($result, [
-            'irn_generated' => $irn,
-            'irn_error_message' => $irnErrorMessage,
             'is_international' => $isInternational,
         ]));
         exit;
@@ -898,19 +887,42 @@ class InvoicesController
             }
 
             // Prepare Alankit IRN payload
-            // invoice_number spleet with - and take last part as invoice number for IRN
-            $invoiceNumberParts = explode('-', $invoice['invoice_number'] ?? '');
-            $invoiceNumber = end($invoiceNumberParts);
-            $buyerAddress = ($customer['address_line1'] ?? '') . ' ' . ($customer['address_line2'] ?? '');
-            $shippingAddress = ($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? '');
+            $buyerAddress = trim(($customer['address_line1'] ?? '') . ' ' . ($customer['address_line2'] ?? ''));
+            $shippingAddress = trim(($customer['shipping_address_line1'] ?? '') . ' ' . ($customer['shipping_address_line2'] ?? ''));
 
             // Set buyer and shipping details for direct export
-            $isDirectExport = (trim($customer['country'] ?? '') !== 'IN');
-            $buyerGstin = $isDirectExport ? 'URP' : ($customer['gstin'] ?? '');
-            $buyerStateCode = $isDirectExport ? '96' : (trim($customer['state_code'] ?? '') ?: $customer['state_code'] ?? '');
-            $buyerPincode = $isDirectExport ? '999999' : (trim($customer['zipcode'] ?? '') ?: $customer['zipcode'] ?? '');
-            $shippingState = $isDirectExport ? '96' : (trim($shippingAddress) ? $customer['shipping_state'] ?? '' : $customer['state'] ?? '');
-            $shippingPincode = $isDirectExport ? '999999' : (trim($shippingAddress) ? $customer['shipping_zipcode'] ?? '' : $customer['zipcode'] ?? '');
+            $countryRaw = strtoupper(trim((string)($customer['country'] ?? '')));
+            $invCurrency = strtoupper(trim((string)($invoice['currency'] ?? 'INR')));
+            $isDirectExport = ($invCurrency !== 'INR') || ($countryRaw !== '' && $countryRaw !== 'IN' && $countryRaw !== 'INDIA');
+
+            $buyerGstin = $isDirectExport ? 'URP' : (trim((string)($customer['gstin'] ?? '')) ?: 'URP');
+
+            $rawBuyerStateCode = trim((string)($customer['state_code'] ?? ''));
+            $buyerStateCode = $isDirectExport ? '96' : (is_numeric($rawBuyerStateCode) && (int)$rawBuyerStateCode > 0 ? sprintf('%02d', (int)$rawBuyerStateCode) : '07');
+
+            $buyerPincode = $isDirectExport ? 999999 : ((int)($customer['zipcode'] ?? 0) ?: 110001);
+
+            $rawShipStateCode = trim((string)($customer['shipping_state_code'] ?? $customer['state_code'] ?? ''));
+            $shippingStateCode = $isDirectExport ? '96' : (is_numeric($rawShipStateCode) && (int)$rawShipStateCode > 0 ? sprintf('%02d', (int)$rawShipStateCode) : $buyerStateCode);
+
+            $shippingPincode = $isDirectExport ? 999999 : ((int)($customer['shipping_zipcode'] ?? $customer['zipcode'] ?? 0) ?: 110001);
+
+            $buyerEmail = trim((string)($customer_info['email'] ?? $customer['shipping_email'] ?? $customer['email'] ?? ''));
+            $buyerPhone = trim((string)($customer_info['phone'] ?? $customer['shipping_phone'] ?? $customer['phone'] ?? $customer['mobile'] ?? ''));
+
+            $buyerFirstName = trim((string)($customer['first_name'] ?? ''));
+            $buyerLastName = trim((string)($customer['last_name'] ?? ''));
+            $buyerFullName = trim($buyerFirstName . ' ' . $buyerLastName);
+            if ($buyerFullName === '') {
+                $buyerFullName = trim((string)($customer['name'] ?? 'Buyer'));
+            }
+
+            $shipFirstName = trim((string)($customer['shipping_first_name'] ?? ''));
+            $shipLastName = trim((string)($customer['shipping_last_name'] ?? ''));
+            $shipFullName = trim($shipFirstName . ' ' . $shipLastName);
+            if ($shipFullName === '') {
+                $shipFullName = $buyerFullName;
+            }
 
             $irnPayload = [
                 'invoice_number' => $invoice['invoice_number'] ?? '',
@@ -920,26 +932,27 @@ class InvoicesController
                 'seller_address' => $firm['address'] ?? '',
                 'seller_city' => $firm['city'] ?? '',
                 'seller_state' => $firm['state'] ?? '',
-                'seller_pincode' => $firm['pin'],
+                'seller_pincode' => $firm['pin'] ?? 110055,
                 'seller_email' => $firm['email'] ?? '',
                 'seller_phone' => $firm['phone'] ?? '',
-                'seller_state_code' => $firm['state_code'] ?? '',
+                'seller_state_code' => sprintf('%02d', (int)($firm['state_code'] ?? 7)),
                 'seller_country' => 'IN',
-                'buyer_name' => $customer['first_name'] . ' ' . $customer['last_name'] ?? '',
-                'buyer_address' => trim($buyerAddress) ? $buyerAddress : $shippingAddress,
-                'buyer_city' => trim($customer['city']) ? $customer['city'] : $customer['shipping_city'],
-                'buyer_state' => trim($customer['state']) ?? $customer['state'] ?? '',
-                'buyer_country' => trim($customer['country']) ?? $customer['country'] ?? 'IN',
+                'buyer_name' => $buyerFullName,
+                'buyer_address' => $buyerAddress !== '' ? $buyerAddress : ($shippingAddress !== '' ? $shippingAddress : 'Export Address'),
+                'buyer_city' => trim((string)($customer['city'] ?? '')) ?: (trim((string)($customer['shipping_city'] ?? '')) ?: ($isDirectExport ? 'Foreign City' : 'Delhi')),
+                'buyer_state' => trim((string)($customer['state'] ?? '')),
+                'buyer_country' => trim((string)($customer['country'] ?? '')) ?: ($isDirectExport ? 'US' : 'IN'),
                 'buyer_pincode' => $buyerPincode,
                 'buyer_state_code' => $buyerStateCode,
-                'buyer_email' => $customer_info['email'] ?? '',
-                'buyer_phone' => $customer_info['phone'] ?? '',
+                'buyer_email' => $buyerEmail,
+                'buyer_phone' => $buyerPhone,
                 'buyer_gstin' => $buyerGstin,
-                'shipping_name' => $customer['shipping_first_name'] . ' ' . $customer['shipping_last_name'] ?? '',
-                'shipping_address' => trim($shippingAddress) ? $shippingAddress : $buyerAddress,
-                'shipping_city' => trim($shippingAddress) ? $customer['shipping_city'] : $customer['city'] ?? '',
-                'shipping_state' => $shippingState,
-                'shipping_country' => trim($shippingAddress) ? $customer['shipping_country'] : $customer['country'] ?? 'IN',
+                'shipping_name' => $shipFullName,
+                'shipping_address' => $shippingAddress !== '' ? $shippingAddress : ($buyerAddress !== '' ? $buyerAddress : 'Export Address'),
+                'shipping_city' => trim((string)($customer['shipping_city'] ?? '')) ?: (trim((string)($customer['city'] ?? '')) ?: ($isDirectExport ? 'Foreign City' : 'Delhi')),
+                'shipping_state' => trim((string)($customer['shipping_state'] ?? $customer['state'] ?? '')),
+                'shipping_state_code' => $shippingStateCode,
+                'shipping_country' => trim((string)($customer['shipping_country'] ?? $customer['country'] ?? '')) ?: ($isDirectExport ? 'US' : 'IN'),
                 'shipping_pincode' => $shippingPincode,
                 'currency' => $invoice['currency'] ?? 'INR',
                 'line_items' => $lineItems,
@@ -949,23 +962,23 @@ class InvoicesController
                 'total_amount' => $invoice['total_amount'] ?? 0,
                 'notes' => $internationalData['final_destination'] ?? '',
                 'reference_number' => $invoice['invoice_number'] ?? '',
-                'pos' => ($customer['country'] != 'IN') ? '96' : $customer['shipping_state_code'] ?? $customer['state_code'], // Place of supply state code (example)
-                'buyer_type' => 'export', // Type of buyer for SupTyp determination
-                'has_payment' => true, // Whether payment is included
-                'shipping_bill_number' => empty($internationalData['shipping_bill_number']) ? "'" . rand(100000, 999999) . "'" : $internationalData['shipping_bill_number'],
+                'pos' => $isDirectExport ? '96' : $shippingStateCode,
+                'buyer_type' => $isDirectExport ? 'export' : 'business',
+                'has_payment' => true,
+                'shipping_bill_number' => empty($internationalData['shipping_bill_number']) ? (string)rand(100000, 999999) : $internationalData['shipping_bill_number'],
                 'shipping_bill_date' => empty($internationalData['shipping_bill_date']) ? date('d/m/Y') : $internationalData['shipping_bill_date'],
                 'shipping_port_code' => empty($internationalData['shipping_port']) ? 'INABG1' : $internationalData['shipping_port'],
                 'shipping_ref_clm' => empty($internationalData['shipping_ref_clm']) ? 'N' : $internationalData['shipping_ref_clm'],
-                'shipping_currency' => empty($internationalData['shipping_currency']) ? 'AED' : $internationalData['shipping_currency'],
-                'shipping_country_code' => empty($internationalData['shipping_country_code']) ? 'AE' : $internationalData['shipping_country_code'],
+                'shipping_currency' => empty($internationalData['shipping_currency']) ? 'USD' : $internationalData['shipping_currency'],
+                'shipping_country_code' => empty($internationalData['shipping_country_code']) ? 'US' : $internationalData['shipping_country_code'],
                 'shipping_exp_duty' => empty($internationalData['shipping_exp_duty']) ? 0 : (float)($internationalData['shipping_exp_duty']),
-                'transport_selection' => $internationalData['transport_selection'],
-                'trans_id' => $internationalData['trans_id'],
-                'trans_name' => $internationalData['trans_name'],
-                'trans_doc_no' => $internationalData['trans_doc_no'],
-                'trans_doc_dt' => $internationalData['trans_doc_dt'],
-                'veh_no' => $internationalData['veh_no'],
-                'veh_type' => $internationalData['veh_type']
+                'transport_selection' => $internationalData['transport_selection'] ?? 'id',
+                'trans_id' => $internationalData['trans_id'] ?? '',
+                'trans_name' => $internationalData['trans_name'] ?? '',
+                'trans_doc_no' => $internationalData['trans_doc_no'] ?? '',
+                'trans_doc_dt' => $internationalData['trans_doc_dt'] ?? '',
+                'veh_no' => $internationalData['veh_no'] ?? '',
+                'veh_type' => $internationalData['veh_type'] ?? ''
             ];
             // echo '<br><br><pre>';
             // print_r($irnPayload);
@@ -1333,36 +1346,272 @@ class InvoicesController
         }
     }
 
-    public function view()
+    public function resolveInvoiceContext(): ?array
     {
-        is_login();
-        global $invoiceModel;
+        global $invoiceModel, $commanModel;
 
-        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-        if ($id <= 0) {
-            echo '<p>Invalid Invoice ID.</p>';
-            exit;
-        }
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : (isset($_GET['invoice_id']) ? (int)$_GET['invoice_id'] : (isset($_POST['invoice_id']) ? (int)$_POST['invoice_id'] : 0));
+        $orderNumber = trim((string)($_GET['order_number'] ?? $_POST['order_number'] ?? ''));
 
-        $invoice = $invoiceModel->getInvoiceById($id);
-        $items = $invoiceModel->getInvoiceItems($id);
-        $internationalData = null;
-        if ($invoice && $invoice['currency'] !== 'INR') {
-            $internationalData = $invoiceModel->getInternationalInvoiceByInvoiceId($id);
+        $invoice = null;
+        if ($id > 0) {
+            $invoice = $invoiceModel->getInvoiceById($id);
+        } elseif ($orderNumber !== '') {
+            $invoice = $invoiceModel->getInvoiceByOrderNumber($orderNumber);
         }
 
         if (!$invoice) {
-            echo '<p>Invoice not found.</p>';
-            exit;
+            return null;
+        }
+
+        $id = (int)$invoice['id'];
+        $items = $invoiceModel->getInvoiceItems($id);
+        $intlData = $invoiceModel->getInternationalInvoiceByInvoiceId($id);
+
+        $vpOrderInfoId = (int)($invoice['vp_order_info_id'] ?? 0);
+        $orderInfo = null;
+        if ($vpOrderInfoId > 0 && $commanModel !== null) {
+            $orderInfo = $commanModel->getRecordById('vp_order_info', $vpOrderInfoId);
+        }
+        if (!is_array($orderInfo) && !empty($items[0]['order_number']) && $commanModel !== null) {
+            $orderInfo = $commanModel->get_customer_address($items[0]['order_number']);
+        }
+        if (!is_array($orderInfo)) {
+            $orderInfo = [];
+        }
+
+        if ($orderNumber === '') {
+            $orderNumber = (string)($items[0]['order_number'] ?? $orderInfo['order_number'] ?? '');
+        }
+
+        $firm = function_exists('app_setting_firm_details') ? app_setting_firm_details() : [];
+
+        return [
+            'invoice' => $invoice,
+            'items' => $items,
+            'intlData' => $intlData,
+            'orderInfo' => $orderInfo,
+            'firm' => $firm,
+            'orderNumber' => $orderNumber,
+            'id' => $id,
+        ];
+    }
+
+    public function view()
+    {
+        is_login();
+
+        $ctx = $this->resolveInvoiceContext();
+        if ($ctx === null) {
+            renderTemplate('views/errors/not_found.php', ['message' => 'Invoice not found.'], 'Not Found');
+            return;
         }
 
         $data = [
-            'invoice' => $invoice,
-            'items' => $items,
-            'internationalData' => $internationalData
+            'invoice' => $ctx['invoice'],
+            'items' => $ctx['items'],
+            'internationalData' => $ctx['intlData'],
+            'order_info' => $ctx['orderInfo'],
+            'firm' => $ctx['firm'],
+            'order_number' => $ctx['orderNumber'],
         ];
 
         renderTemplate('views/invoices/view.php', $data, 'Invoice Details');
+    }
+
+    public function einvoiceInput()
+    {
+        is_login();
+        $ctx = $this->resolveInvoiceContext();
+        if ($ctx === null) {
+            renderTemplate('views/errors/not_found.php', ['message' => 'Invoice not found for E-Invoice generation.'], 'Not Found');
+            return;
+        }
+
+        $invoiceId = $ctx['id'];
+        $orderNumber = $ctx['orderNumber'];
+        $invoice = $ctx['invoice'];
+        $items = $ctx['items'];
+        $intlData = $ctx['intlData'] ?? [];
+        $orderInfo = $ctx['orderInfo'];
+        $firm = $ctx['firm'];
+
+        $isExport = ($invoice['currency'] ?? 'INR') !== 'INR' || (!empty($orderInfo['country']) && strtoupper(trim($orderInfo['country'])) !== 'IN');
+        $elig = [
+            'is_export' => $isExport,
+            'is_b2b' => !empty($orderInfo['gstin']),
+            'scenario' => $isExport ? 'Export' : (!empty($orderInfo['gstin']) ? 'Domestic B2B' : 'B2C'),
+            'grand_total' => (float)($invoice['total_amount'] ?? 0),
+        ];
+
+        renderTemplate('views/pos_register/einvoice_input.php', [
+            'order_info' => $orderInfo,
+            'invoice' => $invoice,
+            'items' => $items,
+            'firm' => $firm,
+            'existing_record' => $intlData,
+            'eligibility' => $elig,
+            'order_number' => $orderNumber,
+            'submit_url' => base_url('?page=invoices&action=einvoice-submit&id=' . $invoiceId),
+            'back_url' => base_url('?page=invoices&action=view&id=' . $invoiceId),
+            'ewaybill_input_url' => base_url('?page=invoices&action=ewaybill-input&id=' . $invoiceId),
+        ], 'Generate E-Invoice');
+    }
+
+    public function einvoiceSubmit()
+    {
+        global $invoiceModel;
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $ctx = $this->resolveInvoiceContext();
+        if ($ctx === null) {
+            echo json_encode(['success' => false, 'message' => 'Invoice context not found.']);
+            exit;
+        }
+
+        $invoiceId = $ctx['id'];
+
+        if (!empty($_POST)) {
+            $updateIntl = [];
+            $fields = [
+                'pre_carriage_by', 'port_of_loading', 'port_of_discharge', 'country_of_origin',
+                'country_of_final_destination', 'final_destination', 'usd_export_rate', 'ap_cost',
+                'freight_charge', 'insurance_charge', 'shipping_bill_number', 'shipping_bill_date',
+                'shipping_port', 'shipping_ref_clm', 'shipping_currency', 'shipping_country_code',
+                'shipping_exp_duty', 'transport_selection', 'trans_id', 'trans_name',
+                'trans_doc_no', 'trans_doc_dt', 'veh_no', 'veh_type', 'trans_mode'
+            ];
+            foreach ($fields as $f) {
+                if (isset($_POST[$f])) {
+                    $val = trim((string)$_POST[$f]);
+                    if (in_array($f, ['usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_exp_duty'], true)) {
+                        $updateIntl[$f] = (float)$val;
+                    } else {
+                        $updateIntl[$f] = $val;
+                    }
+                }
+            }
+            if (!empty($_POST['shipping_port_code'])) {
+                $updateIntl['shipping_port'] = strtoupper(trim((string)$_POST['shipping_port_code']));
+                $updateIntl['port_code'] = strtoupper(trim((string)$_POST['shipping_port_code']));
+            }
+            if (!empty($updateIntl)) {
+                $invoiceModel->updateInvoiceInternational($invoiceId, $updateIntl);
+            }
+        }
+
+        $irnOk = $this->generateAlankitIrnForInvoice($invoiceId);
+        $latestIntl = $invoiceModel->getInternationalInvoiceByInvoiceId($invoiceId) ?: [];
+
+        if ($irnOk && !empty($latestIntl['irn'])) {
+            echo json_encode([
+                'success' => true,
+                'message' => 'E-Invoice (IRN) generated successfully!',
+                'irn' => (string)$latestIntl['irn'],
+                'ack_number' => (string)($latestIntl['ack_number'] ?? ''),
+                'ack_date' => (string)($latestIntl['ack_date'] ?? ''),
+                'ewaybill_url' => base_url('?page=invoices&action=ewaybill-input&id=' . $invoiceId),
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            exit;
+        }
+
+        $errorMsg = $latestIntl['irn_error_message'] ?? 'Failed to generate IRN via Alankit API.';
+        echo json_encode([
+            'success' => false,
+            'message' => $errorMsg,
+            'error_details' => $errorMsg,
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    public function ewaybillInput()
+    {
+        is_login();
+        $ctx = $this->resolveInvoiceContext();
+        if ($ctx === null) {
+            renderTemplate('views/errors/not_found.php', ['message' => 'Invoice not found for E-Way Bill generation.'], 'Not Found');
+            return;
+        }
+
+        $invoiceId = $ctx['id'];
+        $orderNumber = $ctx['orderNumber'];
+        $invoice = $ctx['invoice'];
+        $intlData = $ctx['intlData'] ?? [];
+        $orderInfo = $ctx['orderInfo'];
+        $firm = $ctx['firm'];
+
+        $isExport = ($invoice['currency'] ?? 'INR') !== 'INR' || (!empty($orderInfo['country']) && strtoupper(trim($orderInfo['country'])) !== 'IN');
+        $elig = [
+            'is_export' => $isExport,
+            'is_b2b' => !empty($orderInfo['gstin']),
+            'scenario' => $isExport ? 'Export' : (!empty($orderInfo['gstin']) ? 'Domestic B2B' : 'B2C'),
+            'grand_total' => (float)($invoice['total_amount'] ?? 0),
+        ];
+
+        renderTemplate('views/pos_register/ewaybill_input.php', [
+            'order_info' => $orderInfo,
+            'invoice' => $invoice,
+            'firm' => $firm,
+            'existing_record' => $intlData,
+            'eligibility' => $elig,
+            'order_number' => $orderNumber,
+            'submit_url' => base_url('?page=invoices&action=ewaybill-submit&id=' . $invoiceId),
+            'back_url' => base_url('?page=invoices&action=view&id=' . $invoiceId),
+        ], 'Generate E-Way bill');
+    }
+
+    public function ewaybillSubmit()
+    {
+        global $invoiceModel;
+        is_login();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $ctx = $this->resolveInvoiceContext();
+        if ($ctx === null) {
+            echo json_encode(['success' => false, 'message' => 'Invoice context not found.']);
+            exit;
+        }
+
+        $invoiceId = $ctx['id'];
+
+        $ewbData = [
+            'trans_id' => trim((string)($_POST['trans_id'] ?? $_POST['transporter_id'] ?? '')),
+            'trans_name' => trim((string)($_POST['trans_name'] ?? $_POST['transporter_name'] ?? '')),
+            'trans_mode' => trim((string)($_POST['trans_mode'] ?? '1')),
+            'veh_no' => trim((string)($_POST['veh_no'] ?? $_POST['vehicle_number'] ?? '')),
+            'veh_type' => trim((string)($_POST['veh_type'] ?? 'R')),
+            'trans_doc_no' => trim((string)($_POST['trans_doc_no'] ?? $_POST['doc_no'] ?? '')),
+            'trans_doc_dt' => trim((string)($_POST['trans_doc_dt'] ?? $_POST['doc_dt'] ?? '')),
+            'distance' => (int)($_POST['distance'] ?? 0),
+        ];
+
+        $invoiceModel->updateInvoiceInternational($invoiceId, [
+            'trans_id' => $ewbData['trans_id'],
+            'trans_name' => $ewbData['trans_name'],
+            'trans_mode' => $ewbData['trans_mode'],
+            'veh_no' => $ewbData['veh_no'],
+            'veh_type' => $ewbData['veh_type'],
+            'trans_doc_no' => $ewbData['trans_doc_no'],
+            'trans_doc_dt' => $ewbData['trans_doc_dt'],
+        ]);
+
+        $res = $this->generateAlankitEwbForInvoice($invoiceId, $ewbData);
+        $latestIntl = $invoiceModel->getInternationalInvoiceByInvoiceId($invoiceId) ?: [];
+
+        $ewbNo = (string)($latestIntl['ewb_no'] ?? $res['ewb'] ?? '');
+        $ok = (!empty($res['status']) || $ewbNo !== '');
+
+        echo json_encode([
+            'success' => $ok,
+            'message' => $ok ? 'E-Way Bill generated successfully!' : ($res['message'] ?? 'Failed to generate E-Way bill.'),
+            'ewb_no' => $ewbNo,
+            'ewb_number' => $ewbNo,
+            'ewb_date' => (string)($latestIntl['ewb_date'] ?? ''),
+            'ewb_valid_till' => (string)($latestIntl['ewb_valid_till'] ?? ''),
+            'ewb_status' => (string)($latestIntl['ewb_status'] ?? ($ok ? 'generated' : 'failed')),
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
     }
 
     public function generatePdf()

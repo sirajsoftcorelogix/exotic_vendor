@@ -1403,73 +1403,14 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 if (data.success) {
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = 'Create Invoice';
-
-                    // Check if IRN generation failed
-                    if (data.irn_generated === false && data.irn_error_message) {
-                        // Show IRN error message and regenerate button
-                        showAlert('Invoice created but IRN generation failed: ' + data.irn_error_message, 'warning');
-
-                        // Add regenerate IRN button
-                        const regenerateBtn = document.createElement('span');
-                        regenerateBtn.innerHTML = 'Regenerate IRN';
-                        regenerateBtn.className = 'ml-4 bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded';
-                        regenerateBtn.onclick = function() {
-                            regenerateIrn(data.invoice_id);
-                        };
-
-                        // Find the alert container and add the button
-                        const alertContainer = document.querySelector('.form-actions') || document.body;
-                        alertContainer.appendChild(regenerateBtn);
-
-                        return; // Don't proceed with PDF generation and redirect
-                    }
-
                     localStorage.removeItem('selected_po_orders');
-                    showAlert('Invoice created successfully!', 'success');
-                    //dispatch after success
+
                     const dispatchField = document.querySelector('input[name="dispatch_after_creation"]');
-                    //redirect to ?page=dispatch&action=create&invoice_id=
                     if (dispatchField && dispatchField.checked) {
                         window.location.href = '<?php echo base_url('?page=dispatch&action=create&invoice_id='); ?>' + data.invoice_id;
                         return;
                     }
-                    // Generate PDF after a short delay
-                    setTimeout(() => {
-                        fetch('<?php echo base_url('?page=invoices&action=generate_pdf'); ?>', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    invoice_id: data.invoice_id
-                                })
-                            })
-                            .then(response => response.blob())
-                            .then(blob => {
-                                const url = window.URL.createObjectURL(blob);
-                                const link = document.createElement('a');
-                                link.href = url;
-                                link.download = 'invoice_' + data.invoice_id + '.pdf';
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                                window.URL.revokeObjectURL(url);
-
-                                //if international invoice, redirect to dispatch page
-                                if (data.is_international) {
-                                    window.location.href = '<?php echo base_url('?page=dispatch&action=create&invoice_id='); ?>' + data.invoice_id;
-                                    return;
-                                }
-                                // Redirect to invoice view
-                                setTimeout(() => {
-                                    window.location.href = '<?php echo base_url('?page=orders&action=list'); ?>';
-                                }, 1000);
-                            })
-                            .catch(err => {
-                                console.error('PDF generation error:', err);
-                                window.location.href = '<?php echo base_url('?page=orders&action=list'); ?>';
-                            });
-                    }, 1000);
+                    window.location.href = '<?php echo base_url('?page=invoices&action=view&id='); ?>' + data.invoice_id;
                 } else {
                     invoiceNotify('Error: ' + data.message, 'error');
                     submitBtn.disabled = false;
