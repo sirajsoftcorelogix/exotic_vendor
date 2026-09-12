@@ -354,30 +354,136 @@ return base64_encode($encryptedData);
      * @return array Formatted payload matching Alankit specifications
      */
     public function prepareIrnPayload($invoice) {
+        $country = strtoupper(trim((string)($invoice['buyer_country'] ?? '')));
+        $currency = strtoupper(trim((string)($invoice['currency'] ?? 'INR')));
+        $isExport = ($currency !== 'INR') || ($country !== 'IN' && $country !== 'INDIA' && $country !== '');
+
+        $formatStcd = static function($val, string $fallback = '96'): string {
+            $raw = trim((string)$val);
+            if ($raw === '' || $raw === '0') {
+                return $fallback;
+            }
+            if (is_numeric($raw)) {
+                return sprintf('%02d', (int)$raw);
+            }
+            if (strlen($raw) <= 2) {
+                return strtoupper($raw);
+            }
+            return $fallback;
+        };
+
+        $formatPhone = static function($ph): ?string {
+            if ($ph === null) {
+                return null;
+            }
+            $digits = preg_replace('/\D/', '', (string)$ph);
+            if (strlen($digits) >= 6 && strlen($digits) <= 12) {
+                return $digits;
+            }
+            return null;
+        };
+
+        $formatEmail = static function($em): ?string {
+            if ($em === null) {
+                return null;
+            }
+            $str = trim((string)$em);
+            if (strlen($str) >= 6 && strlen($str) <= 100 && filter_var($str, FILTER_VALIDATE_EMAIL)) {
+                return $str;
+            }
+            return null;
+        };
+
         // Format line items
         $itemList = [];
         if (!empty($invoice['line_items']) && is_array($invoice['line_items'])) {
             foreach ($invoice['line_items'] as $idx => $item) {
+                $qty = max(0.001, (float)($item['quantity'] ?? 0));
+                $unitPrice = round((float)($item['unit_price'] ?? 0), 2);
+                $totAmt = round($qty * $unitPrice, 2);
+                $taxRate = round((float)($item['tax_rate'] ?? 0), 2);
+                $igstAmt = round((float)($item['tax_amount'] ?? $item['igst'] ?? 0), 2);
+                $cgstAmt = round((float)($item['cgst'] ?? 0), 2);
+                $sgstAmt = round((float)($item['sgst'] ?? 0), 2);
+                $calcTotItemVal = $totAmt + $igstAmt + $cgstAmt + $sgstAmt;
+                $totItemVal = isset($item['total']) ? round((float)$item['total'], 2) : round($calcTotItemVal, 2);
+
+                $hsnClean = preg_replace('/\D/', '', (string)($item['hsn'] ?? ''));
+                $hsnCd = strlen($hsnClean) >= 2 ? substr($hsnClean, 0, 8) : '9703';
+
                 $itemList[] = [
                     'SlNo' => (string)($idx + 1),
-                    'PrdDesc' => $item['item_name'] ?? '',
+                    'PrdDesc' => (string)($item['item_name'] ?? 'Product'),
                     'IsServc' => 'N',
-                    'HsnCd' => substr($item['hsn'] ?? '', 0, 8),
-                    'Qty' => (float)($item['quantity'] ?? 0),
-                    'Unit' => $item['unit'] ?? 'NOS',
-                    'UnitPrice' => (float)($item['unit_price'] ?? 0),
-                    'TotAmt' => (float)(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0)),
-                    'AssAmt' => (float)(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0)),
-                    'GstRt' => (int)($item['tax_rate'] ?? 0),
-                    'IgstAmt' => (float)($item['tax_amount'] ?? 0),
-                    'TotItemVal' => (float)(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0) + ($item['tax_amount'] ?? 0)),
-                    'CgstAmt' => 0,
-                    'SgstAmt' => 0
+                    'HsnCd' => $hsnCd,
+                    'Qty' => $qty,
+                    'Unit' => (string)($item['unit'] ?? 'PCS'),
+                    'UnitPrice' => $unitPrice,
+                    'TotAmt' => $totAmt,
+                    'AssAmt' => $totAmt,
+                    'GstRt' => $taxRate,
+                    'IgstAmt' => $igstAmt,
+                    'CgstAmt' => $cgstAmt,
+                    'SgstAmt' => $sgstAmt,
+                    'TotItemVal' => $totItemVal,
                 ];
             }
         }
 
-        // Build Alankit IRN payload
+        $sellerStcd = $formatStcd($invoice['seller_state_code'] ?? '', '07');
+        $buyerStcd = $formatStcd($invoice['buyer_state_code'] ?? '', $isExport ? '96' : '07');
+        $shipStcd = $formatStcd($invoice['shipping_state_code'] ?? $invoice['shipping_state'] ?? '', $buyerStcd);
+
+        $transId = strtoupper(trim((string)($invoice['trans_id'] ?? '')));
+        $transName = trim((string)($invoice['trans_name'] ?? ''));
+        $vehNo = strtoupper(trim((string)($invoice['veh_no'] ?? '')));
+        $vehType = strtoupper(trim((string)($invoice['veh_type'] ?? 'R')));
+        if ($vehType !== 'ODC') {
+            $vehType = 'R';
+        }
+        $transDocNo = trim((string)($invoice['trans_doc_no'] ?? ''));
+        $transMode = trim((string)($invoice['trans_mode'] ?? '1'));
+        if ($transMode === '') {
+            $transMode = '1';
+        }
+
+        $ewbDtls = null;
+        if ($transId !== '') {
+            $ewbDtls = [
+                'TransId' => $transId,
+                'TransName' => $transName,
+                'Distance' => 0,
+            ];
+        } elseif ($vehNo !== '' || $transDocNo !== '') {
+            $validVehNo = (strlen($vehNo) >= 4 && strlen($vehNo) <= 20);
+            $validDocNo = (strlen($transDocNo) >= 1 && strlen($transDocNo) <= 15);
+            if ($validVehNo || $validDocNo) {
+                $ewbDtls = [
+                    'Distance' => 0,
+                    'TransMode' => $transMode,
+                    'VehType' => $vehType,
+                ];
+                if ($validVehNo) {
+                    $ewbDtls['VehNo'] = $vehNo;
+                }
+                if ($validDocNo) {
+                    $ewbDtls['TransDocNo'] = $transDocNo;
+                    $ewbDtls['TransDocDt'] = !empty($invoice['trans_doc_dt'])
+                        ? date('d/m/Y', strtotime($invoice['trans_doc_dt']))
+                        : date('d/m/Y');
+                }
+            }
+        }
+
+        $buyerAddress = trim((string)($invoice['buyer_address'] ?? ''));
+        if ($buyerAddress === '') {
+            $buyerAddress = trim((string)($invoice['shipping_address'] ?? 'Export Address'));
+        }
+        $shippingAddress = trim((string)($invoice['shipping_address'] ?? ''));
+        if ($shippingAddress === '') {
+            $shippingAddress = $buyerAddress;
+        }
+
         return [
             'Version' => '1.1',
             'TranDtls' => [
@@ -390,84 +496,65 @@ return base64_encode($encryptedData);
             'DocDtls' => [
                 'Typ' => 'INV',
                 'No' => (string)($invoice['invoice_number'] ?? ''),
-                'Dt' => $invoice['invoice_date'] ? date('d/m/Y', strtotime($invoice['invoice_date'])) : date('d/m/Y')
+                'Dt' => !empty($invoice['invoice_date']) ? date('d/m/Y', strtotime($invoice['invoice_date'])) : date('d/m/Y')
             ],
             'SellerDtls' => [
-                'Gstin' => $invoice['seller_gstin'] ?? '',
-                'LglNm' => $invoice['seller_name'] ?? '',
-                'TrdNm' => $invoice['seller_name'] ?? '',
-                'Addr1' => $invoice['seller_address'] ?? '',
-                'Loc' => $invoice['seller_city'] ?? '',
-                'Pin' => (int)($invoice['seller_pincode'] ?? 0),
-                'Stcd' => (string)($invoice['seller_state_code'] ?? ''),
-                'Ph' => $invoice['seller_phone'] ?? '',
-                'Em' => $invoice['seller_email'] ?? ''
+                'Gstin' => (string)($invoice['seller_gstin'] ?? ''),
+                'LglNm' => (string)($invoice['seller_name'] ?? ''),
+                'TrdNm' => (string)($invoice['seller_name'] ?? ''),
+                'Addr1' => (string)($invoice['seller_address'] ?? ''),
+                'Loc' => (string)($invoice['seller_city'] ?? 'New Delhi'),
+                'Pin' => (int)($invoice['seller_pincode'] ?? 110055),
+                'Stcd' => $sellerStcd,
+                'Ph' => $formatPhone($invoice['seller_phone'] ?? null),
+                'Em' => $formatEmail($invoice['seller_email'] ?? null)
             ],
             'BuyerDtls' => [
-                'Gstin' => $invoice['buyer_gstin'] ?? '',
-                'LglNm' => $invoice['buyer_name'] ?? '',
-                'TrdNm' => $invoice['buyer_name'] ?? '',
-                'Pos' => $invoice['pos'] ?? '96',
-                'Addr1' => $invoice['buyer_address'] ?? '',
-                'Loc' => $invoice['buyer_city'] ?? '',
-                'Pin' => (int)($invoice['buyer_pincode'] ?? 0),
-                'Stcd' => $invoice['buyer_state_code'] ?? '',
-                'Ph' => $invoice['buyer_phone'] ?? '',
-                'Em' => $invoice['buyer_email'] ?? ''
+                'Gstin' => (string)($invoice['buyer_gstin'] ?? ($isExport ? 'URP' : '')),
+                'LglNm' => (string)($invoice['buyer_name'] ?? 'Buyer'),
+                'TrdNm' => (string)($invoice['buyer_name'] ?? 'Buyer'),
+                'Pos' => $formatStcd($invoice['pos'] ?? $buyerStcd, $buyerStcd),
+                'Addr1' => $buyerAddress,
+                'Loc' => (string)($invoice['buyer_city'] ?? ($isExport ? 'Foreign City' : 'Delhi')),
+                'Pin' => (int)($invoice['buyer_pincode'] ?? ($isExport ? 999999 : 110001)),
+                'Stcd' => $buyerStcd,
+                'Ph' => $formatPhone($invoice['buyer_phone'] ?? null),
+                'Em' => $formatEmail($invoice['buyer_email'] ?? null)
             ],
-            // "DispDtls" => [
-            //     "Nm" => "ABC company pvt ltd",
-            //     "Addr1" => $invoice['shipping_address'] ?? '',                
-            //     "Loc" => $invoice['shipping_city'] ?? '',
-            //     "Pin" => (int)($invoice['shipping_pincode'] ?? 0),
-            //     "Stcd" => $invoice['shipping_state'] ?? ''
-            // ],
             'ShipDtls' => [
-                'Gstin' => $invoice['buyer_gstin'] ?? '',
-                'LglNm' => $invoice['buyer_name'] ?? '',
-                'TrdNm' => $invoice['buyer_name'] ?? '',
-                'Addr1' => $invoice['shipping_address'] ?? '',
-                'Loc' => $invoice['shipping_city'] ?? '',
-                'Pin' => (int)($invoice['shipping_pincode'] ?? 0),
-                'Stcd' => $invoice['shipping_state'] ?? ''
+                'Gstin' => (string)($invoice['buyer_gstin'] ?? ($isExport ? 'URP' : '')),
+                'LglNm' => (string)($invoice['shipping_name'] ?? $invoice['buyer_name'] ?? 'Buyer'),
+                'TrdNm' => (string)($invoice['shipping_name'] ?? $invoice['buyer_name'] ?? 'Buyer'),
+                'Addr1' => $shippingAddress,
+                'Loc' => (string)($invoice['shipping_city'] ?? $invoice['buyer_city'] ?? ($isExport ? 'Foreign City' : 'Delhi')),
+                'Pin' => (int)($invoice['shipping_pincode'] ?? $invoice['buyer_pincode'] ?? ($isExport ? 999999 : 110001)),
+                'Stcd' => $shipStcd
             ],
             'ItemList' => $itemList,
             'ValDtls' => [
-                'AssVal' => (float)($invoice['subtotal'] ?? 0),
-                'CgstVal' => 0,
-                'SgstVal' => 0,
-                'IgstVal' => (float)($invoice['tax_amount'] ?? 0),
+                'AssVal' => round((float)($invoice['subtotal'] ?? 0), 2),
+                'CgstVal' => round((float)($invoice['cgst_total'] ?? 0), 2),
+                'SgstVal' => round((float)($invoice['sgst_total'] ?? 0), 2),
+                'IgstVal' => round((float)($invoice['tax_amount'] ?? 0), 2),
                 'CesVal' => 0,
-                'Discount' => (float)($invoice['discount_amount'] ?? 0),
+                'Discount' => round((float)($invoice['discount_amount'] ?? 0), 2),
                 'OthChrg' => 0,
                 'RndOffAmt' => 0,
-                'TotInvVal' => (float)($invoice['total_amount'] ?? 0)
+                'TotInvVal' => round((float)($invoice['total_amount'] ?? 0), 2)
             ],
-            "PayDtls" => null,
-            "RefDtls" => null,
-            "AddlDocDtls" => null,
-            "ExpDtls" => [
+            'PayDtls' => null,
+            'RefDtls' => null,
+            'AddlDocDtls' => null,
+            'ExpDtls' => $isExport ? [
                 'ShipBNo' => (string)($invoice['shipping_bill_number'] ?? ''),
-                'ShipBDt' => date('d/m/Y', strtotime($invoice['shipping_bill_date'])),
-                'Port' => (string)($invoice['shipping_port_code'] ?? ''),
-                'RefClm' => (string)($invoice['shipping_ref_clm'] ?? ''),
-                'ForCur' => (string)($invoice['shipping_currency'] ?? ''),
-                'CntCode' => (string)($invoice['shipping_country_code'] ?? ''),
-                'ExpDuty' => (float)($invoice['shipping_exp_duty'] ?? 0)
-            ],           
-            "EwbDtls" => 
-               !empty($invoice['trans_id']) ? [
-                'TransId' => (string)($invoice['trans_id'] ?? ''),
-                'TransName' => (string)($invoice['trans_name'] ?? ''),
-                'Distance' => 0
-                ] : [
-                'Distance' => 0,
-                'TransDocNo' => (string)($invoice['trans_doc_no'] ?? ''),
-                'TransDocDt' => $invoice['trans_doc_dt'] ? date('d/m/Y', strtotime($invoice['trans_doc_dt'])) : date('d/m/Y'),
-                'VehNo' => (string)($invoice['veh_no'] ?? ''),
-                'VehType' => (string)($invoice['veh_type'] ?? 'R'),
-                'TransMode' => (string)($invoice['trans_mode'] ?? '1')
-                ]   
+                'ShipBDt' => !empty($invoice['shipping_bill_date']) ? date('d/m/Y', strtotime($invoice['shipping_bill_date'])) : date('d/m/Y'),
+                'Port' => (string)($invoice['shipping_port_code'] ?? 'INABG1'),
+                'RefClm' => (string)($invoice['shipping_ref_clm'] ?? 'N'),
+                'ForCur' => (string)($invoice['shipping_currency'] ?? 'USD'),
+                'CntCode' => (string)($invoice['shipping_country_code'] ?? 'US'),
+                'ExpDuty' => round((float)($invoice['shipping_exp_duty'] ?? 0), 2)
+            ] : null,
+            'EwbDtls' => $ewbDtls
         ];
     }
 

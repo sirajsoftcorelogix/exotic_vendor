@@ -722,6 +722,18 @@ switch ($page) {
             case 'view':
                 $controller->view();
                 break;
+            case 'einvoice-input':
+                $controller->einvoiceInput();
+                break;
+            case 'einvoice-submit':
+                $controller->einvoiceSubmit();
+                break;
+            case 'ewaybill-input':
+                $controller->ewaybillInput();
+                break;
+            case 'ewaybill-submit':
+                $controller->ewaybillSubmit();
+                break;
             case 'preview':
                 $controller->previewInvoice();
                 break;
