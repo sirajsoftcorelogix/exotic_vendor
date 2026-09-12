@@ -94,6 +94,16 @@ if ($flashNotice === null && isset($_GET['already_created']) && $_GET['already_c
             <button type="button" onclick="window.print()" class="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-800 hover:bg-orange-100 shadow-sm transition">
                 <i class="fas fa-print"></i> Print Invoice
             </button>
+            <?php if ($isIrnGenerated): ?>
+                <button type="button" onclick="printDocument('irn')" class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 shadow-sm transition">
+                    <i class="fas fa-file-invoice-dollar"></i> Print E-Invoice (IRN)
+                </button>
+            <?php endif; ?>
+            <?php if ($isEwbGenerated): ?>
+                <button type="button" onclick="printDocument('ewaybill')" class="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-800 hover:bg-blue-100 shadow-sm transition">
+                    <i class="fas fa-truck"></i> Print E-Way Bill
+                </button>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -142,6 +152,9 @@ if ($flashNotice === null && isset($_GET['already_created']) && $_GET['already_c
                             <h3 class="text-base font-bold text-emerald-950 mt-1">IRN Generated Successfully</h3>
                         </div>
                     </div>
+                    <button type="button" onclick="printDocument('irn')" class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 shadow-sm transition shrink-0">
+                        <i class="fas fa-print"></i> Print IRN Slip
+                    </button>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl bg-white/80 p-4 border border-emerald-200 text-xs font-mono">
@@ -185,7 +198,12 @@ if ($flashNotice === null && isset($_GET['already_created']) && $_GET['already_c
                                 <h4 class="text-sm font-bold text-emerald-900 flex items-center gap-2">
                                     <i class="fas fa-box-check text-emerald-600"></i> E-Way Bill Confirmation
                                 </h4>
-                                <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">Confirmed</span>
+                                <div class="flex items-center gap-2">
+                                    <button type="button" onclick="printDocument('ewaybill')" class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800 hover:bg-emerald-100 shadow-sm transition">
+                                        <i class="fas fa-print"></i> Print EWB
+                                    </button>
+                                    <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">Confirmed</span>
+                                </div>
                             </div>
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono bg-slate-50 p-3 rounded-lg border border-slate-200">
                                 <div><span class="font-sans font-semibold text-slate-600">EWB No:</span> <span class="font-bold text-slate-900"><?= $h($ewbNo) ?></span></div>
@@ -346,3 +364,113 @@ if ($flashNotice === null && isset($_GET['already_created']) && $_GET['already_c
 
     </div>
 </div>
+
+<script>
+function printDocument(docType) {
+    if (docType === 'invoice') {
+        window.print();
+        return;
+    }
+    
+    // Create print container
+    const printWindow = window.open('', '_blank', 'width=800,height=900');
+    if (!printWindow) {
+        alert('Please allow popups to print document');
+        return;
+    }
+
+    let title = 'Document Slip';
+    let bodyHtml = '';
+
+    if (docType === 'irn') {
+        title = 'GST E-Invoice (IRN) Slip - Invoice #' + <?= json_encode($invoiceNumber) ?>;
+        bodyHtml = `
+            <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b;">
+                <div style="text-align: center; border-bottom: 2px solid #0284c7; padding-bottom: 15px; margin-bottom: 20px;">
+                    <h1 style="margin: 0; font-size: 22px; color: #0369a1;">GOVERNMENT GST E-INVOICE (IRN) SLIP</h1>
+                    <p style="margin: 5px 0 0; font-size: 13px; color: #64748b;"><?= htmlspecialchars($firmData['firm_name'] ?? 'EXOTIC INDIA ART PVT LTD') ?></p>
+                </div>
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px;">
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: bold; width: 30%;">Invoice Number</td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; font-family: monospace;">` + <?= json_encode($invoiceNumber) ?> + `</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: bold;">Invoice Date</td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1;">` + <?= json_encode($invoiceDate) ?> + `</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: bold;">IRN (Invoice Reference)</td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; font-family: monospace; word-break: break-all; font-weight: bold; color: #0369a1;">` + <?= json_encode($irn) ?> + `</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: bold;">Ack Number</td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; font-family: monospace;">` + <?= json_encode($intl['ack_number'] ?? 'N/A') ?> + `</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: bold;">Ack Date</td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1;">` + <?= json_encode($intl['ack_date'] ?? 'N/A') ?> + `</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: bold;">Buyer Name</td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1;">` + <?= json_encode($buyerName) ?> + `</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: bold;">Invoice Total</td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold;">` + <?= json_encode($currencyPrefix . number_format((float)($inv['total_amount'] ?? 0), 2)) ?> + `</td>
+                    </tr>
+                </table>
+                <div style="margin-top: 30px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+                    Generated via Vendor Portal &bull; GST E-Invoicing System
+                </div>
+            </div>
+        `;
+    } else if (docType === 'ewaybill') {
+        title = 'GST E-Way Bill Slip - Invoice #' + <?= json_encode($invoiceNumber) ?>;
+        bodyHtml = `
+            <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b;">
+                <div style="text-align: center; border-bottom: 2px solid #059669; padding-bottom: 15px; margin-bottom: 20px;">
+                    <h1 style="margin: 0; font-size: 22px; color: #047857;">GOVERNMENT GST E-WAY BILL SLIP</h1>
+                    <p style="margin: 5px 0 0; font-size: 13px; color: #64748b;"><?= htmlspecialchars($firmData['firm_name'] ?? 'EXOTIC INDIA ART PVT LTD') ?></p>
+                </div>
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px;">
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: bold; width: 30%;">E-Way Bill Number</td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; font-family: monospace; font-size: 16px; font-weight: bold; color: #047857;">` + <?= json_encode($ewbNo) ?> + `</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: bold;">EWB Generated Date</td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1;">` + <?= json_encode($intl['ewb_date'] ?? 'N/A') ?> + `</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: bold;">EWB Valid Till</td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold; color: #b45309;">` + <?= json_encode($intl['ewb_valid_till'] ?? 'N/A') ?> + `</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: bold;">IRN Number</td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; font-family: monospace; word-break: break-all;">` + <?= json_encode($irn) ?> + `</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: bold;">Invoice Number</td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; font-family: monospace;">` + <?= json_encode($invoiceNumber) ?> + `</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: bold;">Transporter Name</td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1;">` + <?= json_encode($intl['trans_name'] ?? 'N/A') ?> + `</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: bold;">Transporter ID / Vehicle</td>
+                        <td style="padding: 8px; border: 1px solid #cbd5e1; font-family: monospace;">` + <?= json_encode(($intl['trans_id'] ?? '') ?: ($intl['veh_no'] ?? 'N/A')) ?> + `</td>
+                    </tr>
+                </table>
+                <div style="margin-top: 30px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+                    Generated via Vendor Portal &bull; GST E-Way Bill System
+                </div>
+            </div>
+        `;
+    }
+
+    printWindow.document.write('<html><head><title>' + title + '</title></head><body onload="window.print();window.close();">' + bodyHtml + '</body></html>');
+    printWindow.document.close();
+}
+</script>
