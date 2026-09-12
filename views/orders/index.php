@@ -1714,7 +1714,7 @@
             <p class="text-xs text-gray-600">
                 Updates orders that are not Cancelled, Returned, or Shipped, oldest first.
                 Pending: <strong id="syncPendingCount">…</strong>
-                · <a class="text-emerald-700 font-semibold underline" href="<?= htmlspecialchars(base_url('scripts/sync_order_statuses.php'), ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">Open full-page runner</a>
+                · <a class="text-emerald-700 font-semibold underline" href="<?= htmlspecialchars(base_url('?page=orders&action=sync_order_statuses'), ENT_QUOTES, 'UTF-8') ?>">Open full-page runner</a>
             </p>
             <form id="syncOrderStatusForm" class="space-y-4">
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
