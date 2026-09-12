@@ -636,10 +636,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                         </div>
                     </div>
                     <div class="flex items-center justify-between gap-4 border-t border-orange-100 pt-4">
-                        <div>
-                            <span class="text-base font-bold text-slate-800">Total amount</span>
-                            <span class="block text-xs font-semibold text-orange-600">In <span class="invoice-currency-code-text"><?php echo htmlspecialchars((string) $invoiceCurrency, ENT_QUOTES, 'UTF-8'); ?></span></span>
-                        </div>
+                        <span class="text-base font-bold text-slate-800">Total amount</span>
                         <div class="flex items-center gap-1.5">
                             <span class="invoice-currency-prefix-total text-base font-bold text-orange-800"><?php echo $invoiceCurrency === 'INR' ? '₹' : htmlspecialchars((string)$invoiceCurrency, ENT_QUOTES, 'UTF-8') . ' '; ?></span>
                             <input type="number" name="total_amount" id="total_amount" step="0.01" class="w-40 rounded-lg border-2 border-orange-400 bg-orange-50 px-3 py-2 text-right text-base font-bold tabular-nums text-orange-800" readonly>
