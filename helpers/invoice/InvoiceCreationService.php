@@ -138,12 +138,17 @@ class InvoiceCreationService
         ];
 
         if ($currency !== '' && $currency !== 'INR') {
+            $postedIntl = is_array($request['international'] ?? null) ? $request['international'] : [];
+            $exchangeRate = (float)($postedIntl['usd_export_rate'] ?? 0);
             $currencyRecord = $this->getCurrencyByCode($currency);
-            if ($currencyRecord) {
-                $exchangeRate = (float)($currencyRecord['rate_export'] ?? 1);
+            if ($exchangeRate <= 0 && $currencyRecord) {
+                $exchangeRate = (float)($currencyRecord['rate_export'] ?? 0);
+            }
+            if ($exchangeRate > 0) {
                 $invoiceData['converted_amount'] = (float)$invoiceData['total_amount'] * $exchangeRate;
+                $currencyUnit = is_array($currencyRecord) ? (string)($currencyRecord['currency_unit'] ?? '') : '';
                 $invoiceData['exchange_text'] = 'Exchange Rate ('
-                    . ($currencyRecord['currency_unit'] ?? $currency)
+                    . ($currencyUnit !== '' ? $currencyUnit : $currency)
                     . ' to INR): '
                     . number_format($exchangeRate, 6);
             }
@@ -239,7 +244,28 @@ class InvoiceCreationService
 
         if (is_array($international) && method_exists($this->invoiceModel, 'insert_international_invoice_data')) {
             $international['invoice_id'] = $invoiceId;
-            $this->invoiceModel->insert_international_invoice_data($international);
+            $portCode = strtoupper(trim((string)($international['shipping_port'] ?? $international['port_code'] ?? '')));
+            if ($portCode !== '') {
+                $international['shipping_port'] = $portCode;
+                $international['port_code'] = $portCode;
+            }
+            $intlInserted = $this->invoiceModel->insert_international_invoice_data($international);
+            if (!$intlInserted) {
+                return [
+                    'success' => false,
+                    'message' => 'Invoice saved but export/IRN details were not stored. Please retry IRN from the invoice.',
+                    'invoice_id' => $invoiceId,
+                    'invoice_number' => $invoiceNumber,
+                    'items_created' => $itemCreated,
+                    'items_failed' => $itemsFailed,
+                ];
+            }
+            if ($portCode !== '' && method_exists($this->invoiceModel, 'updateInvoiceInternational')) {
+                $this->invoiceModel->updateInvoiceInternational($invoiceId, [
+                    'port_code' => $portCode,
+                    'shipping_port' => $portCode,
+                ]);
+            }
         }
 
         $discountMeta = $request['discount_meta'] ?? null;

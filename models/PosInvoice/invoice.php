@@ -347,7 +347,7 @@ class POSInvoice
     {
         $allowedFields = [
             'transport_selection', 'trans_mode', 'veh_no', 'veh_type', 'trans_doc_no', 'trans_doc_dt',
-            'trans_id', 'trans_name', 'pre_carriage_by', 'port_of_loading', 'port_of_discharge',
+            'trans_id', 'trans_name', 'pre_carriage_by',             'port_of_loading', 'port_of_discharge', 'port_code',
             'country_of_origin', 'country_of_final_destination', 'final_destination', 'usd_export_rate',
             'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_bill_number', 'shipping_bill_date',
             'shipping_port', 'shipping_ref_clm', 'shipping_currency', 'shipping_country_code',
