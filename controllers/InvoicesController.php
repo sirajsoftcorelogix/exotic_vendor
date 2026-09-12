@@ -980,7 +980,7 @@ class InvoicesController
                 'pos' => $isDirectExport ? '96' : $shippingStateCode,
                 'buyer_type' => $isDirectExport ? 'export' : 'business',
                 'has_payment' => true,
-                'shipping_bill_number' => empty($internationalData['shipping_bill_number']) ? (string)rand(100000, 999999) : $internationalData['shipping_bill_number'],
+                'shipping_bill_number' => empty($internationalData['shipping_bill_number']) ? ($invoice['invoice_number'] ?? '') : $internationalData['shipping_bill_number'],
                 'shipping_bill_date' => empty($internationalData['shipping_bill_date']) ? date('d/m/Y') : $internationalData['shipping_bill_date'],
                 'shipping_port_code' => empty($internationalData['shipping_port']) ? 'INABG1' : $internationalData['shipping_port'],
                 'shipping_ref_clm' => empty($internationalData['shipping_ref_clm']) ? 'N' : $internationalData['shipping_ref_clm'],

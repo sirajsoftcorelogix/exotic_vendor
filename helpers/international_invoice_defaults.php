@@ -68,7 +68,7 @@ function buildInternationalInvoiceDefaults(
         'ap_cost' => 0.0,
         'freight_charge' => 0.0,
         'insurance_charge' => 0.0,
-        'shipping_bill_number' => $orderNumber !== '' ? $orderNumber : (string) random_int(100000, 999999),
+        'shipping_bill_number' => '',
         'shipping_bill_date' => date('Y-m-d'),
         'shipping_port' => 'INABG1',
         'shipping_ref_clm' => 'N',

@@ -31,6 +31,12 @@ $existingEwbDate = $record['ewb_date'] ?? $invoiceData['ewb_date'] ?? '';
 $existingEwbValid = $record['ewb_valid_till'] ?? '';
 $existingTransId = $record['trans_id'] ?? '';
 $existingTransName = $record['trans_name'] ?? '';
+
+$invoiceCurrency = strtoupper(trim((string)($invoiceData['currency'] ?? $orderInfo['currency'] ?? 'INR')));
+if ($invoiceCurrency === '') {
+  $invoiceCurrency = 'INR';
+}
+$currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
 ?>
 
   <div class="max-w-5xl mx-auto px-4 py-8">
@@ -46,7 +52,7 @@ $existingTransName = $record['trans_name'] ?? '';
           Scenario: <?= $h($scenario) ?>
         </span>
         <span class="text-xs font-semibold px-2.5 py-1 rounded-full border border-slate-200 bg-white text-slate-700">
-          Total: ₹<?= $rfmt($elig['grand_total'] ?? 0) ?>
+          Total: <?= $h($currencyPrefix) ?><?= $rfmt($elig['grand_total'] ?? 0) ?>
         </span>
       </div>
     </div>
