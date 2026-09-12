@@ -232,11 +232,11 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block font-semibold text-slate-700 mb-1">City / Location</label>
-                <input type="text" name="buyer_city" value="<?= $h($orderInfo['city'] ?? '') ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
+                <input type="text" name="buyer_city" value="<?= $h(!empty($orderInfo['city']) ? $orderInfo['city'] : (!empty($orderInfo['shipping_city']) ? $orderInfo['shipping_city'] : ($isExport ? 'Foreign City' : 'Delhi'))) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
               </div>
               <div>
                 <label class="block font-semibold text-slate-700 mb-1">Pincode</label>
-                <input type="text" name="buyer_pincode" value="<?= $h(!empty($orderInfo['zipcode']) ? $orderInfo['zipcode'] : ($isExport ? '999999' : '110001')) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
+                <input type="text" name="buyer_pincode" value="<?= $h(!empty($orderInfo['zipcode']) ? $orderInfo['zipcode'] : (!empty($orderInfo['shipping_zipcode']) ? $orderInfo['shipping_zipcode'] : ($isExport ? '999999' : '110001'))) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
               </div>
             </div>
             <div>
