@@ -99,6 +99,10 @@
                                 📄 View Shipping Label
                             </a>
                         <?php endif; ?>
+                        <button type="button" onclick="generateEInvoice(<?php echo (int)($dispatch['invoice_id'] ?? $_GET['invoice_id'] ?? 0); ?>, this)"
+                                class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2 transition">
+                            ⚡ Generate E-Invoice
+                        </button>
                         <?php if (!empty($dispatch['tracking_url'])): ?>
                             <a href="<?php echo htmlspecialchars($dispatch['tracking_url']); ?>" target="_blank" rel="noopener"
                                class="bg-gray-800 hover:bg-gray-900 text-white font-semibold px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
@@ -869,4 +873,73 @@ window.SINGLE_DISPATCH_PAYLOAD = <?php echo json_encode($single_order_payload ??
     // Initialize Single Dispatch Card
     renderOrderCard();
 })();
+
+function generateEInvoice(invoiceId, btn) {
+    if (!invoiceId) {
+        showPosMessageModal({
+            title: 'Error',
+            message: 'Invalid Invoice ID.',
+            tone: 'error'
+        });
+        return;
+    }
+
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span>⌛</span> <span>Generating E-Invoice...</span>`;
+    }
+
+    fetch('?page=invoices&action=regenerate_irn', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ invoice_id: invoiceId })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+        if (data.success) {
+            if (typeof window.showPosMessageModal === 'function') {
+                window.showPosMessageModal({
+                    title: 'E-Invoice Success',
+                    message: data.message || 'E-Invoice (IRN) generated successfully!',
+                    tone: 'success'
+                });
+            } else {
+                alert(data.message || 'E-Invoice (IRN) generated successfully!');
+            }
+        } else {
+            if (typeof window.showPosMessageModal === 'function') {
+                window.showPosMessageModal({
+                    title: 'E-Invoice Generation Failed',
+                    message: data.message || 'Failed to generate E-Invoice.',
+                    tone: 'error'
+                });
+            } else {
+                alert(data.message || 'Failed to generate E-Invoice.');
+            }
+        }
+    })
+    .catch(err => {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+        if (typeof window.showPosMessageModal === 'function') {
+            window.showPosMessageModal({
+                title: 'Error',
+                message: 'Failed to trigger E-Invoice generation: ' + err.message,
+                tone: 'error'
+            });
+        } else {
+            alert('Failed to trigger E-Invoice generation: ' + err.message);
+        }
+    });
+}
 </script>
