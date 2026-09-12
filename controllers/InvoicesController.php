@@ -189,6 +189,21 @@ class InvoicesController
             renderTemplate('views/errors/not_found.php', ['message' => 'No valid order items found for Invoice.'], 'No items selected');
             exit;
         }
+
+        // Check if an active (non-cancelled) invoice is already generated for any of the selected orders
+        $firstOrderNo = trim((string)($data['data'][0]['order_number'] ?? ''));
+        if ($firstOrderNo !== '') {
+            $existingInvoice = $invoiceModel->getActiveInvoiceForOrderNumber($firstOrderNo);
+            if (is_array($existingInvoice) && !empty($existingInvoice['id'])) {
+                unset($_SESSION['invoice_items']);
+                unset($_SESSION['invoice_pos_flag']);
+                $noticeMessage = 'Invoice already created for Order #' . $firstOrderNo . ' (Invoice #' . ($existingInvoice['invoice_number'] ?? $existingInvoice['id']) . ').';
+                $_SESSION['flash_notice_message'] = $noticeMessage;
+                $redirectUrl = base_url('?page=invoices&action=view&id=' . (int)$existingInvoice['id'] . '&already_created=1');
+                header('Location: ' . $redirectUrl);
+                exit;
+            }
+        }
         //customer info
         $orderNumber = [];
         $data['customer'] = $commanModel->getRecordById('vp_customers', isset($data['data'][0]['customer_id']) ? $data['data'][0]['customer_id'] : 0);
