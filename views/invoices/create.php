@@ -411,20 +411,12 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 <input type="hidden" name="vp_order_info_id" id="vp_order_info_id" value="<?= htmlspecialchars((string) ($customer_address[0]['id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" id="billToDisplay" value="<?= htmlspecialchars($defaultBillTo) ?>">
                 <p id="billToText" class="rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-700"><?= htmlspecialchars($defaultBillTo) !== '' ? htmlspecialchars($defaultBillTo) : 'No billing address found' ?></p>
-                <?php if ($showSupplyState || $showGSTContainer): ?>
+                <?php if ($showSupplyState): ?>
                 <div class="mt-3 flex flex-wrap items-center gap-3 text-sm">
-                    <?php if ($showSupplyState): ?>
                     <div id="supplystate" class="inline-flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-slate-700">
                         <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">Supply state</span>
                         <span><?= htmlspecialchars((string) $billingState, ENT_QUOTES, 'UTF-8') ?></span>
                     </div>
-                    <?php endif; ?>
-                    <?php if ($showGSTContainer): ?>
-                        <label id="applyGSTContainer" class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5">
-                            <input type="checkbox" id="applyGST" name="applyGST" value="1" class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
-                            <span class="text-sm font-medium text-gray-700">Apply GST</span>
-                        </label>
-                    <?php endif; ?>
                 </div>
                 <?php endif; ?>
             </div>
@@ -601,7 +593,15 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         <!-- Totals Section -->
         <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0px_10px_15px_-3px_#0000001A] md:p-6">
-                <h2 class="mb-3 text-base font-semibold text-slate-800">GST breakdown</h2>
+                <div class="mb-3 flex items-center justify-between gap-3">
+                    <h2 class="text-base font-semibold text-slate-800">GST breakdown</h2>
+                    <?php if ($showGSTContainer): ?>
+                        <label id="applyGSTContainer" class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5">
+                            <input type="checkbox" id="applyGST" name="applyGST" value="1" class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
+                            <span class="text-sm font-medium text-gray-700">Apply GST</span>
+                        </label>
+                    <?php endif; ?>
+                </div>
                 <div id="taxTotalsDisplay" class="space-y-2 text-sm text-gray-600">
                     <p class="text-gray-400">Totals will appear after GST is calculated.</p>
                 </div>
