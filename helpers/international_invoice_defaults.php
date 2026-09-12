@@ -2,6 +2,30 @@
 
 require_once __DIR__ . '/courier/country_codes.php';
 
+if (!function_exists('normalize_mysql_date')) {
+    /**
+     * Convert any date string (e.g. DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD) into YYYY-MM-DD for MySQL DATE columns.
+     */
+    function normalize_mysql_date(?string $val): ?string
+    {
+        $val = trim((string)$val);
+        if ($val === '' || $val === '0000-00-00' || $val === '00/00/0000') {
+            return null;
+        }
+        if (preg_match('/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{4})$/', $val, $m)) {
+            return sprintf('%04d-%02d-%02d', (int)$m[3], (int)$m[2], (int)$m[1]);
+        }
+        if (preg_match('/^(\d{4})[\/\.-](\d{1,2})[\/\.-](\d{1,2})/', $val, $m)) {
+            return sprintf('%04d-%02d-%02d', (int)$m[1], (int)$m[2], (int)$m[3]);
+        }
+        $ts = strtotime($val);
+        if ($ts !== false && $ts > 0) {
+            return date('Y-m-d', $ts);
+        }
+        return date('Y-m-d');
+    }
+}
+
 /**
  * Build default values for vp_invoices_international / IRN export fields.
  *

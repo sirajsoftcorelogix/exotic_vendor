@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../helpers/international_invoice_defaults.php';
 
 class Invoice
 {
@@ -300,10 +301,7 @@ class Invoice
         $freightCharge = (float)($data['freight_charge'] ?? 0);
         $insuranceCharge = (float)($data['insurance_charge'] ?? 0);
         $shippingBillNo = (string)($data['shipping_bill_number'] ?? '');
-        $shippingBillDate = trim((string)($data['shipping_bill_date'] ?? ''));
-        if ($shippingBillDate === '') {
-            $shippingBillDate = date('Y-m-d');
-        }
+        $shippingBillDate = normalize_mysql_date($data['shipping_bill_date'] ?? null) ?? date('Y-m-d');
         $shippingRefClm = (string)($data['shipping_ref_clm'] ?? 'N');
         $shippingCurrency = (string)($data['shipping_currency'] ?? 'USD');
         $shippingCountryCode = (string)($data['shipping_country_code'] ?? '');
@@ -380,8 +378,12 @@ class Invoice
 
         foreach ($allowedFields as $field) {
             if (isset($data[$field])) {
+                $val = $data[$field];
+                if ($field === 'shipping_bill_date' && $val !== null) {
+                    $val = normalize_mysql_date((string)$val) ?? date('Y-m-d');
+                }
                 $updateFields[] = "$field = ?";
-                $bindParams[] = $data[$field];
+                $bindParams[] = $val;
                 $bindTypes .= 's'; // All fields treated as strings
             }
         }

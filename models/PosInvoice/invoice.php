@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../helpers/international_invoice_defaults.php';
 
 class POSInvoice
 {
@@ -362,8 +363,12 @@ class POSInvoice
 
         foreach ($allowedFields as $field) {
             if (array_key_exists($field, $data)) {
+                $val = $data[$field];
+                if ($field === 'shipping_bill_date' && $val !== null) {
+                    $val = normalize_mysql_date((string)$val) ?? date('Y-m-d');
+                }
                 $updateFields[] = "$field = ?";
-                $bindParams[] = $data[$field];
+                $bindParams[] = $val;
                 $bindTypes .= 's';
             }
         }

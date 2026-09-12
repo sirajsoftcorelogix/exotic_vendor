@@ -260,7 +260,7 @@ class InvoiceRequestBuilder
             'freight_charge' => (float)($post['freight_charge'] ?? 0),
             'insurance_charge' => (float)($post['insurance_charge'] ?? 0),
             'shipping_bill_number' => trim((string)($post['shipping_bill_number'] ?? '')),
-            'shipping_bill_date' => trim((string)($post['shipping_bill_date'] ?? '')),
+            'shipping_bill_date' => normalize_mysql_date($post['shipping_bill_date'] ?? null) ?? date('Y-m-d'),
             'shipping_port' => $shippingPort,
             'port_code' => $shippingPort,
             'shipping_ref_clm' => trim((string)($post['shipping_ref_clm'] ?? '')),

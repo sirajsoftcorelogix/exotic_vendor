@@ -471,7 +471,9 @@ class InvoicesController
                 foreach ($internationalFields as $field) {
                     if (isset($input[$field])) {
                         $value = $input[$field];
-                        if (in_array($field, ['usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_exp_duty'])) {
+                        if ($field === 'shipping_bill_date') {
+                            $internationalData[$field] = normalize_mysql_date($value);
+                        } else if (in_array($field, ['usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_exp_duty'])) {
                             $internationalData[$field] = floatval($value);
                         } else {
                             $internationalData[$field] = trim((string)$value);
@@ -1500,7 +1502,9 @@ class InvoicesController
             foreach ($fields as $f) {
                 if (isset($_POST[$f])) {
                     $val = trim((string)$_POST[$f]);
-                    if (in_array($f, ['usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_exp_duty'], true)) {
+                    if ($f === 'shipping_bill_date') {
+                        $updateIntl[$f] = normalize_mysql_date($val);
+                    } elseif (in_array($f, ['usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_exp_duty'], true)) {
                         $updateIntl[$f] = (float)$val;
                     } else {
                         $updateIntl[$f] = $val;
