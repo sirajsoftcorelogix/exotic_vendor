@@ -675,7 +675,8 @@ class DomesticEwbIrnService {
             'Version' => '1.1',
             'TranDtls' => [
                 'TaxSch' => 'GST',
-                'SupTyp' => $customer['gstin'] ? 'B2B' : 'B2C',
+                'SupTyp' => 'B2C',
+                //'SupTyp' => $customer['gstin'] ? 'B2B' : 'B2C',
                 'RegRev' => 'N',
                 //'EcmGstin' => $firm['gst'] ?? '',
                 //'EcmGstin' => $alankitConfig['gstin'] ?? '07AADCE1400C1ZJ',
