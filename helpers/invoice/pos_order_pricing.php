@@ -33,7 +33,9 @@ function pos_order_inclusive_line_total(array $row, string $kind = 'disc'): floa
 
 function pos_order_pretax_unit_price(array $row, string $kind = 'disc'): float
 {
-    $incl = pos_order_inclusive_unit_price($row, $kind);
+    $qty = max(1, (int)($row['quantity'] ?? 1));
+    $addonsTotal = pos_order_line_addons_total($row);
+    $incl = pos_order_inclusive_unit_price($row, $kind) + ($addonsTotal / $qty);
     if ($incl <= 0) {
         return 0.0;
     }
