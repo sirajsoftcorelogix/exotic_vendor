@@ -167,6 +167,12 @@ class POSInvoice
 
     public function syncInvoiceEwbData($invoice_id, $data = [])
     {
+        $irn = $data['irn'] ?? null;
+        $ewbNumber = $data['ewb_number'] ?? null;
+        $ackNumber = $data['ack_number'] ?? null;
+        $ackDate = $data['ack_date'] ?? null;
+        $invoiceId = (int) $invoice_id;
+
         $stmt = $this->db->prepare(
             "UPDATE vp_invoices
             SET irn = COALESCE(?, irn),
@@ -182,11 +188,11 @@ class POSInvoice
 
         $stmt->bind_param(
             'ssssi',
-            $data['irn'] ?? null,
-            $data['ewb_number'] ?? null,
-            $data['ack_number'] ?? null,
-            $data['ack_date'] ?? null,
-            (int) $invoice_id
+            $irn,
+            $ewbNumber,
+            $ackNumber,
+            $ackDate,
+            $invoiceId
         );
 
         return $stmt->execute();
