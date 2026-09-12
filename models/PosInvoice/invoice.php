@@ -352,18 +352,30 @@ class POSInvoice
         }
         $checked = true;
 
-        $checkRes = @$this->db->query("SHOW COLUMNS FROM vp_invoices_international LIKE 'ewb_error_message'");
-        if ($checkRes && $checkRes->num_rows > 0) {
-            return;
+        $existingCols = [];
+        $res = @$this->db->query("SHOW COLUMNS FROM vp_invoices_international");
+        if ($res && $res->num_rows > 0) {
+            while ($row = $res->fetch_assoc()) {
+                if (!empty($row['Field'])) {
+                    $existingCols[strtolower($row['Field'])] = true;
+                }
+            }
         }
 
-        @$this->db->query("ALTER TABLE vp_invoices_international
-            ADD COLUMN `ewb_no` VARCHAR(50) NULL AFTER `irn_error_message`,
-            ADD COLUMN `ewb_date` DATETIME NULL AFTER `ewb_no`,
-            ADD COLUMN `ewb_valid_till` DATETIME NULL AFTER `ewb_date`,
-            ADD COLUMN `ewb_request_payload` LONGTEXT NULL,
-            ADD COLUMN `ewb_response_payload` LONGTEXT NULL,
-            ADD COLUMN `ewb_error_message` LONGTEXT NULL");
+        $colsToAdd = [
+            'ewb_no' => 'VARCHAR(50) NULL',
+            'ewb_date' => 'DATETIME NULL',
+            'ewb_valid_till' => 'DATETIME NULL',
+            'ewb_request_payload' => 'LONGTEXT NULL',
+            'ewb_response_payload' => 'LONGTEXT NULL',
+            'ewb_error_message' => 'LONGTEXT NULL',
+        ];
+
+        foreach ($colsToAdd as $col => $type) {
+            if (!isset($existingCols[strtolower($col)])) {
+                @$this->db->query("ALTER TABLE vp_invoices_international ADD COLUMN `$col` $type");
+            }
+        }
     }
 
     public function updateInvoiceInternational($invoice_id, $data)
