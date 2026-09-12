@@ -957,25 +957,19 @@ class InvoicesController
         $payload = [
             'Irn' => (string) ($internationalData['irn'] ?? ''),
             'Distance' => 0,
-            // 'DispDtls' => [
-            //     'Nm' => trim((string) (($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? ''))),
-            //     'Addr1' => $shippingAddress !== '' ? $shippingAddress : $buyerAddress,
-            //     'Addr2' => '',
-            //     'Loc' => trim((string) ($customer['shipping_city'] ?? $customer['city'] ?? '')),
-            //     'Pin' => explode('-', $zip)[0] ?? '',
-            //     'Stcd' => trim((string) ($customer['shipping_state_code'] ?? $customer['state_code'] ?? '')),
-            // ],
-            // 'ExpDtls' => [
-            //     'ShipBNo' => (string) ($internationalData['shipping_bill_number'] ?? ''),
-            //     'ShipBDt' => !empty($internationalData['shipping_bill_date'])
-            //         ? date('d/m/Y', strtotime((string) $internationalData['shipping_bill_date']))
-            //         : date('d/m/Y'),
-            //     'Port' => (string) ($internationalData['shipping_port'] ?? $internationalData['shipping_port_code'] ?? 'INABG1'),
-            //     'RefClm' => (string) ($internationalData['shipping_ref_clm'] ?? 'N'),
-            //     'ForCur' => (string) ($internationalData['shipping_currency'] ?? $invoice['currency'] ?? 'USD'),
-            //     'CntCode' => (string) ($internationalData['shipping_country_code'] ?? $customer['shipping_country'] ?? $customer['country'] ?? ''),
-            //     'ExpDuty' => (float) ($internationalData['shipping_exp_duty'] ?? 0),
-            // ],
+            'DispDtls' => [
+                'Nm' => $firm['firm_name'] ?? '',
+                'Addr1' => trim((string) ($firm['firm_address'] ?? '')),                
+                'Loc' => trim((string) ($firm['firm_city'] ?? '')),
+                'Pin' => $firm['firm_pin'] ?? '',
+                'Stcd' => trim((string) ($firm['firm_state_code'] ?? '')),
+            ],
+            "ExpShipDtls" => [
+                "Addr1" => $shippingAddress !== '' ? $shippingAddress : $buyerAddress,                
+                "Loc" => trim((string) ($customer['shipping_city'] ?? $customer['city'] ?? '')),
+                "Pin" => explode('-', $zip)[0] ?? '',
+                "Stcd"=> trim((string) ($customer['shipping_state_code'] ?? $customer['state_code'] ?? ''))
+            ],            
         ];
 
         if (!empty($ewbData)) {
