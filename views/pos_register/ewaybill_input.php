@@ -241,7 +241,17 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
               </div>
               <div>
                 <label class="block font-semibold text-slate-700 mb-1">State Code</label>
-                <input type="text" name="disp_state_code" value="<?= $h($firmData['state_code'] ?? '07') ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
+                <?php
+                $dispGstin = trim((string)($firmData['gst'] ?? $firmData['gstin'] ?? '07AADCE1400C1ZJ'));
+                $dispStcd = '';
+                if (strlen($dispGstin) >= 2 && ctype_digit(substr($dispGstin, 0, 2)) && (int)substr($dispGstin, 0, 2) > 0) {
+                    $dispStcd = sprintf('%02d', (int)substr($dispGstin, 0, 2));
+                } else {
+                    $rawSt = (int)($firmData['state_code'] ?? 7);
+                    $dispStcd = sprintf('%02d', $rawSt > 0 ? $rawSt : 7);
+                }
+                ?>
+                <input type="text" name="disp_state_code" value="<?= $h($dispStcd) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
               </div>
             </div>
           </div>
