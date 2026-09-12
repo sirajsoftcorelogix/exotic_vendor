@@ -63,7 +63,7 @@ class InvoicesController
     public function create()
     {
         is_login();
-        global $ordersModel, $usersModel, $commanModel, $conn;
+        global $invoiceModel, $ordersModel, $usersModel, $commanModel, $conn;
 
         $rawPoitem = $_POST['poitem'] ?? $_GET['poitem'] ?? null;
         $rawOrderNumber = $_POST['order_number'] ?? $_GET['order_number'] ?? null;
