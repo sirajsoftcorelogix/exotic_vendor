@@ -671,6 +671,18 @@ class DomesticEwbIrnService {
             }
         }
 
+        $sellerGstin = trim((string)($alankitConfig['gstin'] ?? $firm['gst'] ?? '07AADCE1400C1ZJ'));
+        if ($sellerGstin === '') {
+            $sellerGstin = '07AADCE1400C1ZJ';
+        }
+        $sellerStateCode = '';
+        if (strlen($sellerGstin) >= 2 && ctype_digit(substr($sellerGstin, 0, 2)) && (int)substr($sellerGstin, 0, 2) > 0) {
+            $sellerStateCode = sprintf('%02d', (int)substr($sellerGstin, 0, 2));
+        } else {
+            $rawSt = (int)($firm['state_code'] ?? 7);
+            $sellerStateCode = sprintf('%02d', $rawSt > 0 ? $rawSt : 7);
+        }
+
         return [
             'Version' => '1.1',
             'TranDtls' => [
@@ -688,13 +700,13 @@ class DomesticEwbIrnService {
                 'Dt' => $invoice['invoice_date'] ? date('d/m/Y', strtotime($invoice['invoice_date'])) : date('d/m/Y')
             ],
             'SellerDtls' => [
-                'Gstin' => $alankitConfig['gstin'] ?? '07AADCE1400C1ZJ',
+                'Gstin' => $sellerGstin,
                 'LglNm' => $firm['firm_name'] ?? '',
                 'TrdNm' => $firm['firm_name'] ?? '',
                 'Addr1' => $firm['address'] ?? '',
                 'Loc' => $firm['city'] ?? '',
                 'Pin' => (int)($firm['pin'] ?? 0),
-                'Stcd' => (string)($firm['state_code'] ?? ''),
+                'Stcd' => $sellerStateCode,
                 'Ph' => $firm['phone'] ?? '',
                 'Em' => $firm['email'] ?? ''
             ],

@@ -941,10 +941,22 @@ class InvoicesController
                 $shipFullName = $buyerFullName;
             }
 
+            $sellerGstin = trim((string)($alankitConfig['gstin'] ?? $firm['gst'] ?? '07AADCE1400C1ZJ'));
+            if ($sellerGstin === '') {
+                $sellerGstin = '07AADCE1400C1ZJ';
+            }
+            $sellerStateCode = '';
+            if (strlen($sellerGstin) >= 2 && ctype_digit(substr($sellerGstin, 0, 2)) && (int)substr($sellerGstin, 0, 2) > 0) {
+                $sellerStateCode = sprintf('%02d', (int)substr($sellerGstin, 0, 2));
+            } else {
+                $rawFirmSt = (int)($firm['state_code'] ?? 7);
+                $sellerStateCode = sprintf('%02d', $rawFirmSt > 0 ? $rawFirmSt : 7);
+            }
+
             $irnPayload = [
                 'invoice_number' => $invoice['invoice_number'] ?? '',
                 'invoice_date' => $invoice['invoice_date'] ?? date('Y-m-d'),
-                'seller_gstin' => $alankitConfig['gstin'] ?? '07AADCE1400C1ZJ',
+                'seller_gstin' => $sellerGstin,
                 'seller_name' => $firm['firm_name'] ?? '',
                 'seller_address' => $firm['address'] ?? '',
                 'seller_city' => $firm['city'] ?? '',
@@ -952,7 +964,7 @@ class InvoicesController
                 'seller_pincode' => $firm['pin'] ?? 110055,
                 'seller_email' => $firm['email'] ?? '',
                 'seller_phone' => $firm['phone'] ?? '',
-                'seller_state_code' => sprintf('%02d', (int)($firm['state_code'] ?? 7)),
+                'seller_state_code' => $sellerStateCode,
                 'seller_country' => 'IN',
                 'buyer_name' => $buyerFullName,
                 'buyer_address' => $buyerAddress !== '' ? $buyerAddress : ($shippingAddress !== '' ? $shippingAddress : 'Export Address'),
