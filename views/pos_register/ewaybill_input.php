@@ -106,35 +106,81 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
       <input type="hidden" name="invoice_id" value="<?= (int)($invoiceData['id'] ?? 0) ?>" />
 
       <!-- Section 1: IRN / Document Reference -->
-      <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-800 mb-4 pb-2 border-b border-slate-100 flex items-center gap-2">
+      <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 mb-4 pb-2 border-b border-slate-200 flex items-center gap-2">
           <span class="w-2 h-2 rounded-full bg-emerald-600"></span>
-          1. IRN / Document Reference
+          1. IRN / Document Reference (Locked - Auto-filled from Invoice)
         </h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
           <div>
             <label class="block font-semibold text-slate-700 mb-1">IRN Number (If Generated)</label>
-            <input type="text" name="irn" value="<?= $h($existingIrn) ?>" placeholder="Optional IRN string" class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800 focus:border-emerald-500 focus:outline-none" />
+            <input type="text" name="irn" value="<?= $h($existingIrn) ?>" placeholder="IRN String" readonly class="w-full h-9 rounded-lg border border-slate-200 bg-slate-100/70 px-3 font-mono text-slate-700 cursor-not-allowed" />
           </div>
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Document / Invoice Number</label>
-            <input type="text" name="doc_no" value="<?= $h($invoiceData['invoice_number'] ?? $orderNumber) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-medium text-slate-800 focus:border-emerald-500 focus:outline-none" />
+            <input type="text" name="doc_no" value="<?= $h($invoiceData['invoice_number'] ?? $orderNumber) ?>" readonly class="w-full h-9 rounded-lg border border-slate-200 bg-slate-100/70 px-3 font-medium text-slate-700 cursor-not-allowed" />
           </div>
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Document Date (DD/MM/YYYY)</label>
-            <input type="text" name="doc_dt" value="<?= date('d/m/Y') ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-medium text-slate-800 focus:border-emerald-500 focus:outline-none" />
+            <?php
+            $docDateFormatted = !empty($invoiceData['invoice_date']) ? date('d/m/Y', strtotime($invoiceData['invoice_date'])) : date('d/m/Y');
+            ?>
+            <input type="text" name="doc_dt" value="<?= $h($docDateFormatted) ?>" readonly class="w-full h-9 rounded-lg border border-slate-200 bg-slate-100/70 px-3 font-medium text-slate-700 cursor-not-allowed" />
           </div>
         </div>
       </div>
 
       <!-- Section 2: Transport & Vehicle Information -->
       <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-800 mb-4 pb-2 border-b border-slate-100 flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-emerald-600"></span>
-          2. Transport &amp; Vehicle Information
-        </h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-          <?php if (trim((string)$existingTransId) === ''): ?>
+        <div class="mb-4 pb-2 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-600"></span>
+            2. Transport &amp; Vehicle Information
+          </h2>
+          <!-- Selection Toggle -->
+          <div class="inline-flex rounded-lg bg-slate-100 p-1 text-xs">
+            <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 has-[:checked]:bg-white has-[:checked]:font-bold has-[:checked]:shadow-sm text-slate-700">
+              <input type="radio" name="transport_selection" value="courier" <?= (trim((string)$existingTransId) !== '' || empty($record['veh_no'])) ? 'checked' : '' ?> class="h-3.5 w-3.5 text-emerald-600" data-ewb-transport-selection />
+              <span>Transporter / Courier (Trans ID)</span>
+            </label>
+            <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 has-[:checked]:bg-white has-[:checked]:font-bold has-[:checked]:shadow-sm text-slate-700">
+              <input type="radio" name="transport_selection" value="vehicle" <?= (trim((string)$existingTransId) === '' && !empty($record['veh_no'])) ? 'checked' : '' ?> class="h-3.5 w-3.5 text-emerald-600" data-ewb-transport-selection />
+              <span>Vehicle / Self Transport</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Transporter / Courier Fields -->
+        <div id="ewbTransporterFields" class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Registered Transporter / Courier</label>
+            <select id="ewbTransporterSelect" class="w-full h-9 rounded-lg border border-slate-300 px-3 bg-slate-50 font-medium text-slate-800 focus:bg-white focus:border-emerald-500 focus:outline-none">
+              <option value="">-- Select Courier / Transporter --</option>
+              <?php foreach (($eway_transporters ?? []) as $ewayTrans): ?>
+                <?php
+                $tName = trim((string)($ewayTrans['trans_name'] ?? ''));
+                $tGstin = strtoupper(trim((string)($ewayTrans['gstin'] ?? '')));
+                if ($tName === '' || $tGstin === '') continue;
+                $tSelected = (strcasecmp($existingTransId, $tGstin) === 0);
+                ?>
+                <option value="<?= $h($tGstin) ?>" data-trans-name="<?= $h($tName) ?>" <?= $tSelected ? 'selected' : '' ?>>
+                  <?= $h($tName) ?> (<?= $h($tGstin) ?>)
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Transporter ID (GSTIN / TransID)</label>
+            <input type="text" id="ewbTransIdInput" name="trans_id" value="<?= $h($existingTransId) ?>" placeholder="e.g. 07AADCE1400C1ZJ" class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono font-semibold text-slate-800 focus:border-emerald-500 focus:outline-none" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block font-semibold text-slate-700 mb-1">Transporter Name</label>
+            <input type="text" id="ewbTransNameInput" name="trans_name" value="<?= $h($existingTransName) ?>" placeholder="e.g. BlueDart / Delhivery / DHL" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800 focus:border-emerald-500 focus:outline-none" />
+          </div>
+        </div>
+
+        <!-- Vehicle / Self Transport Fields -->
+        <div id="ewbVehicleFields" class="hidden grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 text-xs">
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Transport Mode</label>
             <select name="trans_mode" class="w-full h-9 rounded-lg border border-slate-300 px-3 bg-slate-50 font-medium text-slate-800 focus:bg-white focus:border-emerald-500 focus:outline-none">
@@ -146,7 +192,7 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
           </div>
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Vehicle Number (VehNo)</label>
-            <input type="text" name="veh_no" value="<?= $h($record['veh_no'] ?? 'DL01AB1234') ?>" placeholder="e.g. DL01AB1234" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono font-semibold text-slate-800 focus:border-emerald-500 focus:outline-none" />
+            <input type="text" name="veh_no" value="<?= $h($record['veh_no'] ?? '') ?>" placeholder="e.g. DL01AB1234" class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono font-semibold text-slate-800 focus:border-emerald-500 focus:outline-none" />
           </div>
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Vehicle Type (VehType)</label>
@@ -156,30 +202,13 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
             </select>
           </div>
           <div>
-            <label class="block font-semibold text-slate-700 mb-1">Transport Doc / LR No (TransDocNo)</label>
-            <input type="text" name="trans_doc_no" value="<?= $h('LR-' . rand(10000, 99999)) ?>" class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
+            <label class="block font-semibold text-slate-700 mb-1">Transport Doc / LR No</label>
+            <input type="text" name="trans_doc_no" value="<?= $h($record['trans_doc_no'] ?? '') ?>" placeholder="LR / AWB Number" class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
           </div>
           <div>
-            <label class="block font-semibold text-slate-700 mb-1">Transport Doc Date (DD/MM/YYYY)</label>
-            <input type="text" name="trans_doc_dt" value="<?= date('d/m/Y') ?>" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
+            <label class="block font-semibold text-slate-700 mb-1">Transport Doc Date</label>
+            <input type="text" name="trans_doc_dt" value="<?= $h(!empty($record['trans_doc_dt']) ? $record['trans_doc_dt'] : date('d/m/Y')) ?>" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
           </div>
-              <?php
-                else: ?>
-
-          <!-- <div>
-            <label class="block font-semibold text-slate-700 mb-1">Distance in KM </label>
-            <input type="number" name="distance" value="0" min="1" max="4000"  class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono font-semibold text-slate-800 focus:border-emerald-500 focus:outline-none" />
-          </div> -->
-
-          <div>
-            <label class="block font-semibold text-slate-700 mb-1">Transporter ID (GSTIN)</label>
-            <input type="text" name="trans_id" value="<?= $h($existingTransId) ?>" placeholder="Optional 15-char GSTIN" class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
-          </div>
-          <div>
-            <label class="block font-semibold text-slate-700 mb-1">Transporter Name</label>
-            <input type="text" name="trans_name" value="<?= $h($existingTransName) ?>" placeholder="Optional Name" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
-          </div>
-          <?php endif; ?>
         </div>
       </div>
 
@@ -266,6 +295,43 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
   </div>
 
   <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const ewbTransporterFields = document.getElementById('ewbTransporterFields');
+      const ewbVehicleFields = document.getElementById('ewbVehicleFields');
+      const ewbTransporterSelect = document.getElementById('ewbTransporterSelect');
+      const ewbTransIdInput = document.getElementById('ewbTransIdInput');
+      const ewbTransNameInput = document.getElementById('ewbTransNameInput');
+
+      function applyEwbTransportSelection(mode) {
+        const isCourier = (mode === 'courier');
+        if (ewbTransporterFields) {
+          ewbTransporterFields.classList.toggle('hidden', !isCourier);
+          ewbTransporterFields.querySelectorAll('input, select').forEach(el => el.disabled = !isCourier);
+        }
+        if (ewbVehicleFields) {
+          ewbVehicleFields.classList.toggle('hidden', isCourier);
+          ewbVehicleFields.querySelectorAll('input, select').forEach(el => el.disabled = isCourier);
+        }
+      }
+
+      document.querySelectorAll('[data-ewb-transport-selection]').forEach(radio => {
+        radio.addEventListener('change', function () {
+          applyEwbTransportSelection(this.value);
+        });
+      });
+
+      const activeRadio = document.querySelector('[data-ewb-transport-selection]:checked');
+      applyEwbTransportSelection(activeRadio ? activeRadio.value : 'courier');
+
+      ewbTransporterSelect?.addEventListener('change', function () {
+        const selected = this.options[this.selectedIndex];
+        if (selected && selected.value) {
+          if (ewbTransIdInput) ewbTransIdInput.value = selected.value;
+          if (ewbTransNameInput) ewbTransNameInput.value = selected.dataset.transName || '';
+        }
+      });
+    });
+
     document.getElementById('ewaybillForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       const form = this;
