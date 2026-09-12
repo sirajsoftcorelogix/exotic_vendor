@@ -962,13 +962,15 @@ class InvoicesController
                 'Addr1' => trim((string) ($firm['firm_address'] ?? '')),                
                 'Loc' => trim((string) ($firm['firm_city'] ?? '')),
                 'Pin' => $firm['firm_pin'] ?? '',
-                'Stcd' => trim((string) ($firm['firm_state_code'] ?? '')),
+                'Stcd' => trim((string) ($firm['state_code'] ?? '')),
             ],
             "ExpShipDtls" => [
                 "Addr1" => $shippingAddress !== '' ? $shippingAddress : $buyerAddress,                
                 "Loc" => trim((string) ($customer['shipping_city'] ?? $customer['city'] ?? '')),
-                "Pin" => explode('-', $zip)[0] ?? '',
-                "Stcd"=> trim((string) ($customer['shipping_state_code'] ?? $customer['state_code'] ?? ''))
+                //"Pin" => explode('-', $zip)[0] ?? '',
+                //"Stcd"=> trim((string) ($customer['shipping_state_code'] ?? $customer['state_code'] ?? ''))
+                "Pin" => 110025,
+                "Stcd"=> '07'
             ],            
         ];
 
