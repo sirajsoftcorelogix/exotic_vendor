@@ -607,23 +607,43 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                 </div>
             </div>
             <div class="rounded-2xl border border-orange-100 bg-white p-5 shadow-[0px_10px_15px_-3px_#0000001A] md:p-6">
-                <h2 class="mb-4 text-base font-semibold text-slate-800">Invoice total</h2>
+                <div class="mb-4 flex items-center justify-between">
+                    <h2 class="text-base font-semibold text-slate-800">Invoice total</h2>
+                    <span class="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-800 ring-1 ring-orange-200">
+                        <span class="invoice-currency-code-text"><?php echo htmlspecialchars((string) $invoiceCurrency, ENT_QUOTES, 'UTF-8'); ?></span>
+                    </span>
+                </div>
                 <div class="space-y-3">
                     <div class="flex items-center justify-between gap-4">
                         <span class="text-sm text-gray-600">Subtotal</span>
-                        <input type="number" name="subtotal" id="subtotal" step="0.01" class="w-40 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-right text-sm font-medium tabular-nums" readonly>
+                        <div class="flex items-center gap-1.5">
+                            <span class="invoice-currency-prefix-subtotal text-sm font-medium text-gray-500"><?php echo $invoiceCurrency === 'INR' ? '₹' : htmlspecialchars((string)$invoiceCurrency, ENT_QUOTES, 'UTF-8') . ' '; ?></span>
+                            <input type="number" name="subtotal" id="subtotal" step="0.01" class="w-40 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-right text-sm font-medium tabular-nums" readonly>
+                        </div>
                     </div>
                     <div class="flex items-center justify-between gap-4">
                         <span class="text-sm text-gray-600">Tax amount</span>
-                        <input type="number" name="tax_amount" id="tax_amount" step="0.01" class="w-40 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-right text-sm font-medium tabular-nums" readonly>
+                        <div class="flex items-center gap-1.5">
+                            <span class="invoice-currency-prefix-tax text-sm font-medium text-gray-500"><?php echo $invoiceCurrency === 'INR' ? '₹' : htmlspecialchars((string)$invoiceCurrency, ENT_QUOTES, 'UTF-8') . ' '; ?></span>
+                            <input type="number" name="tax_amount" id="tax_amount" step="0.01" class="w-40 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-right text-sm font-medium tabular-nums" readonly>
+                        </div>
                     </div>
                     <div class="flex items-center justify-between gap-4">
                         <span class="text-sm text-gray-600">Discount</span>
-                        <input type="number" name="discount_amount" id="discount_amount" step="0.01" class="w-40 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-right text-sm font-medium tabular-nums" value="0" oninput="calculateTotals()" readonly>
+                        <div class="flex items-center gap-1.5">
+                            <span class="invoice-currency-prefix-discount text-sm font-medium text-gray-500"><?php echo $invoiceCurrency === 'INR' ? '₹' : htmlspecialchars((string)$invoiceCurrency, ENT_QUOTES, 'UTF-8') . ' '; ?></span>
+                            <input type="number" name="discount_amount" id="discount_amount" step="0.01" class="w-40 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-right text-sm font-medium tabular-nums" value="0" oninput="calculateTotals()" readonly>
+                        </div>
                     </div>
                     <div class="flex items-center justify-between gap-4 border-t border-orange-100 pt-4">
-                        <span class="text-base font-bold text-slate-800">Total amount</span>
-                        <input type="number" name="total_amount" id="total_amount" step="0.01" class="w-40 rounded-lg border-2 border-orange-400 bg-orange-50 px-3 py-2 text-right text-base font-bold tabular-nums text-orange-800" readonly>
+                        <div>
+                            <span class="text-base font-bold text-slate-800">Total amount</span>
+                            <span class="block text-xs font-semibold text-orange-600">In <span class="invoice-currency-code-text"><?php echo htmlspecialchars((string) $invoiceCurrency, ENT_QUOTES, 'UTF-8'); ?></span></span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="invoice-currency-prefix-total text-base font-bold text-orange-800"><?php echo $invoiceCurrency === 'INR' ? '₹' : htmlspecialchars((string)$invoiceCurrency, ENT_QUOTES, 'UTF-8') . ' '; ?></span>
+                            <input type="number" name="total_amount" id="total_amount" step="0.01" class="w-40 rounded-lg border-2 border-orange-400 bg-orange-50 px-3 py-2 text-right text-base font-bold tabular-nums text-orange-800" readonly>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -808,10 +828,26 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         }
     }
 
-    function invoiceCurrencyPrefix() {
+    function invoiceCurrencyCode() {
         const first = document.querySelector('#invoiceTable input[name="currency[]"]');
-        const currency = first ? String(first.value || 'INR') : 'INR';
-        return currency === 'INR' ? '₹' : currency + ' ';
+        const currency = first ? String(first.value || '').trim() : '';
+        return currency || <?php echo json_encode((string)$invoiceCurrency, JSON_UNESCAPED_UNICODE); ?> || 'INR';
+    }
+
+    function invoiceCurrencyPrefix() {
+        const code = invoiceCurrencyCode();
+        return code === 'INR' ? '₹' : code + ' ';
+    }
+
+    function refreshInvoiceCurrencyDisplay() {
+        const prefix = invoiceCurrencyPrefix();
+        const code = invoiceCurrencyCode();
+        document.querySelectorAll('.invoice-currency-prefix-subtotal, .invoice-currency-prefix-tax, .invoice-currency-prefix-discount, .invoice-currency-prefix-total').forEach(function(el) {
+            el.textContent = prefix;
+        });
+        document.querySelectorAll('.invoice-currency-code-text').forEach(function(el) {
+            el.textContent = code;
+        });
     }
 
     function applyAddressSelection() {
@@ -1081,6 +1117,8 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
         document.getElementById('subtotal').value = roundToTwo(subtotal).toFixed(2);
         document.getElementById('tax_amount').value = roundToTwo(totalTax).toFixed(2);
         document.getElementById('total_amount').value = totalAmount.toFixed(2);
+
+        refreshInvoiceCurrencyDisplay();
 
         // Update tax totals display
         const taxTotalsDisplay = document.getElementById('taxTotalsDisplay');
