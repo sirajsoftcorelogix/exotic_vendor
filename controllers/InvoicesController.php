@@ -8,6 +8,7 @@ require_once 'models/courier/CourierPartner.php';
 require_once 'models/port/PortMaster.php';
 require_once 'models/country/country.php';
 require_once __DIR__ . '/../helpers/international_invoice_defaults.php';
+require_once __DIR__ . '/../helpers/invoice/pos_order_pricing.php';
 require_once __DIR__ . '/../helpers/app_settings.php';
 
 $invoiceModel = new Invoice($conn);
@@ -197,10 +198,29 @@ class InvoicesController
                 $orderNumber[] = $order['order_number'];
                 $data['customer_address'][$key] = $commanModel->get_customer_address($order['order_number']);
             }
-            //unit_price calculation with finalprice
-            $gstRate = isset($order['gst']) ? $order['gst'] : 0;
-            $finalPrice = $order['finalprice'];
-            $unitPriceBeforeGst = ($finalPrice / (1 + ($gstRate / 100))) / $order['quantity'];
+        }
+
+        $firstAddress = !empty($data['customer_address']) && is_array($data['customer_address'])
+            ? reset($data['customer_address'])
+            : null;
+        $pricingMap = pos_order_build_line_display_pricing_map(
+            $data['data'],
+            null,
+            is_array($firstAddress) ? $firstAddress : null,
+            $commanModel
+        );
+
+        foreach ($data['data'] as $key => $order) {
+            $gstRate = (float)($order['gst'] ?? 0);
+            $qty = max(1, (int)($order['quantity'] ?? 1));
+            $lineId = (int)($order['id'] ?? 0);
+            $pricing = $pricingMap[$lineId] ?? null;
+
+            if (is_array($pricing) && isset($pricing['taxable_value'])) {
+                $unitPriceBeforeGst = round((float)$pricing['taxable_value'] / $qty, 4);
+            } else {
+                $unitPriceBeforeGst = pos_order_pretax_unit_price($order, 'disc');
+            }
             $data['data'][$key]['unit_price'] = number_format($unitPriceBeforeGst, 2, '.', '');
         }
         //firm info
@@ -1557,9 +1577,7 @@ class InvoicesController
 
         //calculate unit price before gst
         foreach ($orderItems as $key => $order) {
-            $gstRate = isset($order['gst']) ? $order['gst'] : 0;
-            $finalPrice = $order['finalprice'];
-            $unitPriceBeforeGst = ($finalPrice / (1 + ($gstRate / 100))) / $order['quantity'];
+            $unitPriceBeforeGst = pos_order_pretax_unit_price($order, 'disc');
             $orderItems[$key]['unit_price'] = number_format($unitPriceBeforeGst, 2, '.', '');
         }
 
@@ -1660,7 +1678,7 @@ class InvoicesController
                 $_POST['hsn'][] = $it['hsn'];
                 $_POST['quantity'][] = $it['quantity'];
 
-                $unit = ($it['finalprice'] / (1 + ($it['gst'] / 100))) / $it['quantity'];
+                $unit = pos_order_pretax_unit_price($it, 'disc');
 
                 $_POST['unit_price'][] = $unit;
                 $_POST['tax_rate'][] = $it['gst'];
