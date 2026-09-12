@@ -33,6 +33,12 @@ $scenario = $elig['scenario'] ?? ($isExport ? 'Export' : ($isB2b ? 'Domestic B2B
 $existingIrn = $record['irn'] ?? $invoiceData['irn'] ?? '';
 $existingAckNo = $record['ack_number'] ?? $invoiceData['ack_number'] ?? '';
 $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
+
+$invoiceCurrency = strtoupper(trim((string)($invoiceData['currency'] ?? $orderInfo['currency'] ?? 'INR')));
+if ($invoiceCurrency === '') {
+  $invoiceCurrency = 'INR';
+}
+$currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -68,7 +74,7 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
           Scenario: <?= $h($scenario) ?>
         </span>
         <span class="text-xs font-semibold px-2.5 py-1 rounded-full border border-slate-200 bg-white text-slate-700">
-          Total: ₹<?= $rfmt($elig['grand_total'] ?? 0) ?>
+          Total: <?= $h($currencyPrefix) ?><?= $rfmt($elig['grand_total'] ?? 0) ?>
         </span>
       </div>
     </div>
@@ -163,37 +169,37 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         
         <!-- Seller -->
-        <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-800 mb-4 pb-2 border-b border-slate-100 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-slate-700"></span>
-            Seller (Supplier) Info
+        <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 mb-4 pb-2 border-b border-slate-200 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-slate-500"></span>
+            Seller (Supplier) Info (Locked - Firm Details)
           </h2>
           <div class="space-y-3 text-xs">
             <div>
               <label class="block font-semibold text-slate-700 mb-1">Seller GSTIN</label>
-              <input type="text" name="seller_gstin" value="<?= $h($firmData['gst'] ?? '07AADCE1400C1ZJ') ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono font-semibold text-slate-800" />
+              <input type="text" name="seller_gstin" value="<?= $h($firmData['gst'] ?? '07AADCE1400C1ZJ') ?>" readonly class="w-full h-9 rounded-lg border border-slate-200 px-3 font-mono font-semibold bg-slate-100/70 text-slate-700 cursor-not-allowed" />
             </div>
             <div>
               <label class="block font-semibold text-slate-700 mb-1">Legal / Trade Name</label>
-              <input type="text" name="seller_name" value="<?= $h($firmData['firm_name'] ?? 'EXOTIC INDIA ART PVT LTD') ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-medium text-slate-800" />
+              <input type="text" name="seller_name" value="<?= $h($firmData['firm_name'] ?? 'EXOTIC INDIA ART PVT LTD') ?>" readonly class="w-full h-9 rounded-lg border border-slate-200 px-3 font-medium bg-slate-100/70 text-slate-700 cursor-not-allowed" />
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block font-semibold text-slate-700 mb-1">City / Location</label>
-                <input type="text" name="seller_city" value="<?= $h($firmData['city'] ?? 'New Delhi') ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
+                <input type="text" name="seller_city" value="<?= $h($firmData['city'] ?? 'New Delhi') ?>" readonly class="w-full h-9 rounded-lg border border-slate-200 px-3 bg-slate-100/70 text-slate-700 cursor-not-allowed" />
               </div>
               <div>
                 <label class="block font-semibold text-slate-700 mb-1">State Code (Stcd)</label>
-                <input type="text" name="seller_state_code" value="<?= $h($firmData['state_code'] ?? '07') ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
+                <input type="text" name="seller_state_code" value="<?= $h(!empty($firmData['state_code']) ? sprintf('%02d', (int)$firmData['state_code']) : '07') ?>" readonly class="w-full h-9 rounded-lg border border-slate-200 px-3 font-mono bg-slate-100/70 text-slate-700 cursor-not-allowed" />
               </div>
             </div>
             <div>
               <label class="block font-semibold text-slate-700 mb-1">Pincode</label>
-              <input type="text" name="seller_pincode" value="<?= $h($firmData['pin'] ?? '110055') ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
+              <input type="text" name="seller_pincode" value="<?= $h($firmData['pin'] ?? '110055') ?>" readonly class="w-full h-9 rounded-lg border border-slate-200 px-3 font-mono bg-slate-100/70 text-slate-700 cursor-not-allowed" />
             </div>
             <div>
               <label class="block font-semibold text-slate-700 mb-1">Address</label>
-              <input type="text" name="seller_address" value="<?= $h($firmData['address'] ?? '') ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
+              <input type="text" name="seller_address" value="<?= $h($firmData['address'] ?? '') ?>" readonly class="w-full h-9 rounded-lg border border-slate-200 px-3 bg-slate-100/70 text-slate-700 cursor-not-allowed" />
             </div>
           </div>
         </div>
@@ -246,35 +252,33 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
         <div class="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm">
           <h2 class="text-sm font-bold uppercase tracking-wider text-amber-900 mb-4 pb-2 border-b border-amber-200 flex items-center gap-2">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-            Export Information (Required for International / SEZ Invoices)
+            Export Information (Locked - Auto-filled from Invoice)
           </h2>
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
             <div>
               <label class="block font-semibold text-amber-900 mb-1">Shipping Bill Number</label>
-              <input type="text" name="shipping_bill_number" value="<?= $h($record['shipping_bill_number'] ?? 'SB-' . rand(100000, 999999)) ?>" class="w-full h-9 rounded-lg border border-amber-300 px-3 font-mono bg-white" />
+              <input type="text" name="shipping_bill_number" value="<?= $h(!empty($record['shipping_bill_number']) ? $record['shipping_bill_number'] : ($invoiceData['invoice_number'] ?? $orderNumber)) ?>" readonly class="w-full h-9 rounded-lg border border-amber-200 px-3 font-mono bg-amber-100/60 text-slate-700 cursor-not-allowed" />
             </div>
             <div>
               <label class="block font-semibold text-amber-900 mb-1">Shipping Bill Date (DD/MM/YYYY)</label>
-              <input type="text" name="shipping_bill_date" value="<?= $h($record['shipping_bill_date'] ?? '') ?>" class="w-full h-9 rounded-lg border border-amber-300 px-3 bg-white" />
+              <input type="text" name="shipping_bill_date" value="<?= $h(!empty($record['shipping_bill_date']) ? date('d/m/Y', strtotime($record['shipping_bill_date'])) : date('d/m/Y')) ?>" readonly class="w-full h-9 rounded-lg border border-amber-200 px-3 bg-amber-100/60 text-slate-700 cursor-not-allowed" />
             </div>
             <div>
               <label class="block font-semibold text-amber-900 mb-1">Port Code</label>
-              <input type="text" name="shipping_port_code" value="<?= $h($record['shipping_port_code'] ?? 'INABG1') ?>" class="w-full h-9 rounded-lg border border-amber-300 px-3 font-mono bg-white" />
+              <input type="text" name="shipping_port_code" value="<?= $h(!empty($record['shipping_port']) ? $record['shipping_port'] : (!empty($record['port_code']) ? $record['port_code'] : (!empty($record['shipping_port_code']) ? $record['shipping_port_code'] : 'INABG1'))) ?>" readonly class="w-full h-9 rounded-lg border border-amber-200 px-3 font-mono bg-amber-100/60 text-slate-700 cursor-not-allowed" />
             </div>
             <div>
               <label class="block font-semibold text-amber-900 mb-1">Foreign Currency Code</label>
-              <input type="text" name="shipping_currency" value="<?= $h($invoiceData['currency'] ?? 'USD') ?>" class="w-full h-9 rounded-lg border border-amber-300 px-3 font-mono bg-white" />
+              <input type="text" name="shipping_currency" value="<?= $h($invoiceData['currency'] ?? 'USD') ?>" readonly class="w-full h-9 rounded-lg border border-amber-200 px-3 font-mono bg-amber-100/60 text-slate-700 cursor-not-allowed" />
             </div>
             <div>
               <label class="block font-semibold text-amber-900 mb-1">Country Code (2 Chars ISO)</label>
-              <input type="text" name="shipping_country_code" value="<?= $h(!empty($orderInfo['country']) ? substr(strtoupper($orderInfo['country']), 0, 2) : 'US') ?>" class="w-full h-9 rounded-lg border border-amber-300 px-3 font-mono bg-white" />
+              <input type="text" name="shipping_country_code" value="<?= $h(!empty($record['shipping_country_code']) ? strtoupper($record['shipping_country_code']) : (!empty($orderInfo['country']) ? substr(strtoupper($orderInfo['country']), 0, 2) : 'US')) ?>" readonly class="w-full h-9 rounded-lg border border-amber-200 px-3 font-mono bg-amber-100/60 text-slate-700 cursor-not-allowed" />
             </div>
             <div>
               <label class="block font-semibold text-amber-900 mb-1">Refund Claim (RefClm)</label>
-              <select name="shipping_ref_clm" class="w-full h-9 rounded-lg border border-amber-300 px-3 bg-white">
-                <option value="N">N - No Refund Claimed</option>
-                <option value="Y">Y - Refund Claimed</option>
-              </select>
+              <input type="hidden" name="shipping_ref_clm" value="<?= $h($record['shipping_ref_clm'] ?? 'N') ?>" />
+              <input type="text" value="<?= ($record['shipping_ref_clm'] ?? 'N') === 'Y' ? 'Y - Refund Claimed' : 'N - No Refund Claimed' ?>" readonly class="w-full h-9 rounded-lg border border-amber-200 px-3 bg-amber-100/60 text-slate-700 cursor-not-allowed" />
             </div>
           </div>
         </div>
@@ -297,7 +301,7 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
                 <th class="p-2 border border-slate-200 text-right">Unit Price</th>
                 <th class="p-2 border border-slate-200 text-right">GST Rate</th>
                 <th class="p-2 border border-slate-200 text-right">Tax Amt</th>
-                <th class="p-2 border border-slate-200 text-right">Total (₹)</th>
+                <th class="p-2 border border-slate-200 text-right">Total (<?= $h($invoiceCurrency) ?>)</th>
               </tr>
             </thead>
             <tbody>
@@ -321,20 +325,20 @@ $existingAckDate = $record['ack_date'] ?? $invoiceData['ack_date'] ?? '';
                   <td class="p-2 border border-slate-200 font-medium"><?= $h($it['item_name'] ?? $it['title'] ?? 'Product Item') ?></td>
                   <td class="p-2 border border-slate-200 font-mono"><?= $h(substr($it['hsn'] ?? '1001', 0, 8)) ?></td>
                   <td class="p-2 border border-slate-200 text-right font-mono"><?= $qty ?></td>
-                  <td class="p-2 border border-slate-200 text-right font-mono">₹<?= $rfmt($unitPrice) ?></td>
+                  <td class="p-2 border border-slate-200 text-right font-mono"><?= $h($currencyPrefix) ?><?= $rfmt($unitPrice) ?></td>
                   <td class="p-2 border border-slate-200 text-right font-mono"><?= $taxRate ?>%</td>
-                  <td class="p-2 border border-slate-200 text-right font-mono">₹<?= $rfmt($lineTax) ?></td>
-                  <td class="p-2 border border-slate-200 text-right font-bold text-slate-900">₹<?= $rfmt($lineTotal) ?></td>
+                  <td class="p-2 border border-slate-200 text-right font-mono"><?= $h($currencyPrefix) ?><?= $rfmt($lineTax) ?></td>
+                  <td class="p-2 border border-slate-200 text-right font-bold text-slate-900"><?= $h($currencyPrefix) ?><?= $rfmt($lineTotal) ?></td>
                 </tr>
               <?php endforeach; ?>
             </tbody>
             <tfoot>
               <tr class="bg-slate-50 font-bold text-slate-900 text-xs">
                 <td colspan="4" class="p-2 border border-slate-200 text-right">Totals:</td>
-                <td class="p-2 border border-slate-200 text-right font-mono">Taxable: ₹<?= $rfmt($totalTaxable) ?></td>
+                <td class="p-2 border border-slate-200 text-right font-mono">Taxable: <?= $h($currencyPrefix) ?><?= $rfmt($totalTaxable) ?></td>
                 <td class="p-2 border border-slate-200"></td>
-                <td class="p-2 border border-slate-200 text-right font-mono">Tax: ₹<?= $rfmt($totalTax) ?></td>
-                <td class="p-2 border border-slate-200 text-right font-mono text-sm text-blue-700">₹<?= $rfmt($elig['grand_total'] ?? $grandVal) ?></td>
+                <td class="p-2 border border-slate-200 text-right font-mono">Tax: <?= $h($currencyPrefix) ?><?= $rfmt($totalTax) ?></td>
+                <td class="p-2 border border-slate-200 text-right font-mono text-sm text-blue-700"><?= $h($currencyPrefix) ?><?= $rfmt($elig['grand_total'] ?? $grandVal) ?></td>
               </tr>
             </tfoot>
           </table>
