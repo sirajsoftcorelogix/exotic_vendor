@@ -228,6 +228,81 @@ class InvoicesController
         return new InvoiceCreationService($conn, $invoiceModel, $ordersModel, $commanModel);
     }
 
+    /**
+     * Flatten Alankit / IRN error payloads into unique readable lines.
+     *
+     * @param mixed $value
+     * @return list<string>
+     */
+    private function flattenEinvoiceErrors($value): array
+    {
+        $lines = [];
+        $walk = function ($item) use (&$walk, &$lines): void {
+            if ($item === null || $item === '' || $item === false) {
+                return;
+            }
+            if (is_string($item)) {
+                $trim = trim($item);
+                if ($trim === '') {
+                    return;
+                }
+                $decoded = json_decode($trim, true);
+                if (json_last_error() === JSON_ERROR_NONE && (is_array($decoded) || is_object($decoded))) {
+                    $walk($decoded);
+                    return;
+                }
+                $lines[] = $trim;
+                return;
+            }
+            if (is_object($item)) {
+                $item = (array) $item;
+            }
+            if (is_array($item)) {
+                $code = $item['ErrorCode'] ?? $item['error_code'] ?? $item['ErrorCd'] ?? $item['errorCode'] ?? '';
+                $msg = $item['ErrorMessage'] ?? $item['error_message'] ?? $item['ErrorMsg'] ?? $item['ErrorDesc']
+                    ?? $item['message'] ?? $item['Message'] ?? $item['InfMsg'] ?? '';
+                if ($code !== '' || $msg !== '') {
+                    $line = trim(($code !== '' ? '[' . $code . '] ' : '') . $msg);
+                    if ($line !== '') {
+                        $lines[] = $line;
+                    }
+                    return;
+                }
+                foreach ($item as $child) {
+                    $walk($child);
+                }
+                return;
+            }
+            $cast = trim((string) $item);
+            if ($cast !== '') {
+                $lines[] = $cast;
+            }
+        };
+        $walk($value);
+
+        $unique = [];
+        foreach ($lines as $line) {
+            if ($line !== '' && !in_array($line, $unique, true)) {
+                $unique[] = $line;
+            }
+        }
+
+        return $unique;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function emitEinvoiceJson(array $payload): void
+    {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
     public function regenerateIrn()
     {
         is_login();
@@ -235,68 +310,100 @@ class InvoicesController
 
         require_once dirname(__DIR__) . '/helpers/courier/country_codes.php';
 
-        $input = json_decode(file_get_contents('php://input'), true);
-        if (!is_array($input)) {
-            $input = $_POST;
-        }
+        try {
+            $input = json_decode(file_get_contents('php://input'), true);
+            if (!is_array($input)) {
+                $input = $_POST;
+            }
 
-        $invoiceId = isset($input['invoice_id']) ? (int)$input['invoice_id'] : 0;
+            $invoiceId = isset($input['invoice_id']) ? (int)$input['invoice_id'] : 0;
 
-        if ($invoiceId <= 0) {
-            echo json_encode(['success' => false, 'message' => 'Invalid invoice ID']);
-            exit;
-        }
-        
-        $invoice = $invoiceModel->getInvoiceById($invoiceId);
-        if (!$invoice) {
-            echo json_encode(['success' => false, 'message' => 'Invoice not found']);
-            exit;
-        }
+            if ($invoiceId <= 0) {
+                $this->emitEinvoiceJson([
+                    'success' => false,
+                    'message' => 'Invalid invoice ID',
+                    'errors' => ['Invalid invoice ID'],
+                ]);
+            }
 
-        $isInternational = false;
-        if (!empty($invoice['currency']) && strtoupper($invoice['currency']) !== 'INR') {
-            $isInternational = true;
-        } else {
-            $shippingCountry = $invoice['address']['shipping_country'] ?? $invoice['address']['country'] ?? 'IN';
-            $destCountry = normalizeCountryIso2($shippingCountry, $conn);
-            $isInternational = isInternationalShipmentCountry($destCountry, $conn);
-        }
+            $invoice = $invoiceModel->getInvoiceById($invoiceId);
+            if (!$invoice) {
+                $this->emitEinvoiceJson([
+                    'success' => false,
+                    'message' => 'Invoice not found',
+                    'errors' => ['Invoice not found for ID #' . $invoiceId],
+                ]);
+            }
 
-        if ($isInternational) {
-            $internationalFields = ['pre_carriage_by', 'port_of_loading', 'port_of_discharge', 'country_of_origin', 'country_of_final_destination', 'final_destination', 'usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_bill_number', 'shipping_bill_date', 'shipping_port', 'shipping_ref_clm', 'shipping_currency', 'shipping_country_code', 'shipping_exp_duty'];
-            $internationalData = [];
-            foreach ($internationalFields as $field) {
-                if (isset($input[$field])) {
-                    $value = $input[$field];
-                    if (in_array($field, ['usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_exp_duty'])) {
-                        $internationalData[$field] = floatval($value);
-                    } else {
-                        $internationalData[$field] = trim((string)$value);
+            $isInternational = false;
+            if (!empty($invoice['currency']) && strtoupper((string) $invoice['currency']) !== 'INR') {
+                $isInternational = true;
+            } else {
+                $shippingCountry = $invoice['address']['shipping_country'] ?? $invoice['address']['country'] ?? 'IN';
+                $destCountry = normalizeCountryIso2($shippingCountry, $conn);
+                $isInternational = isInternationalShipmentCountry($destCountry, $conn);
+            }
+
+            if ($isInternational) {
+                $internationalFields = ['pre_carriage_by', 'port_of_loading', 'port_of_discharge', 'country_of_origin', 'country_of_final_destination', 'final_destination', 'usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_bill_number', 'shipping_bill_date', 'shipping_port', 'shipping_ref_clm', 'shipping_currency', 'shipping_country_code', 'shipping_exp_duty'];
+                $internationalData = [];
+                foreach ($internationalFields as $field) {
+                    if (isset($input[$field])) {
+                        $value = $input[$field];
+                        if (in_array($field, ['usd_export_rate', 'ap_cost', 'freight_charge', 'insurance_charge', 'shipping_exp_duty'])) {
+                            $internationalData[$field] = floatval($value);
+                        } else {
+                            $internationalData[$field] = trim((string)$value);
+                        }
                     }
                 }
+
+                if (!empty($internationalData)) {
+                    $invoiceModel->updateInvoiceInternational($invoiceId, $internationalData);
+                }
+
+                $irn = $this->generateAlankitIrnForInvoice($invoiceId);
+
+                if ($irn) {
+                    $this->emitEinvoiceJson([
+                        'success' => true,
+                        'message' => 'E-Invoice (IRN) generated successfully',
+                        'is_international' => true,
+                    ]);
+                }
+
+                $internationalRecord = $invoiceModel->getInternationalInvoiceByInvoiceId($invoiceId) ?: [];
+                $responsePayload = [];
+                if (!empty($internationalRecord['response_payload'])) {
+                    $decodedResponse = json_decode((string) $internationalRecord['response_payload'], true);
+                    $responsePayload = is_array($decodedResponse) ? $decodedResponse : [];
+                }
+                $errors = $this->flattenEinvoiceErrors([
+                    $internationalRecord['irn_error_message'] ?? null,
+                    $internationalRecord['ewb_error_message'] ?? null,
+                    $responsePayload['ErrorDetails'] ?? null,
+                    $responsePayload['InfoDtls'] ?? null,
+                    $responsePayload['message'] ?? $responsePayload['Message'] ?? null,
+                ]);
+                if ($errors === []) {
+                    $errors[] = 'Failed to generate IRN for this international invoice.';
+                }
+                $this->emitEinvoiceJson([
+                    'success' => false,
+                    'message' => $errors[0],
+                    'errors' => $errors,
+                    'irn_error_message' => $internationalRecord['irn_error_message'] ?? '',
+                    'is_international' => true,
+                ]);
             }
 
-            if (!empty($internationalData)) {
-                $invoiceModel->updateInvoiceInternational($invoiceId, $internationalData);
-            }
-
-            // Attempt to regenerate IRN
-            $irn = $this->generateAlankitIrnForInvoice($invoiceId);
-
-            if ($irn) {
-                echo json_encode(['success' => true, 'message' => 'E-Invoice (IRN) generated successfully', 'is_international' => true]);
-            } else {
-                $internationalRecord = $invoiceModel->getInternationalInvoiceByInvoiceId($invoiceId);
-                $errorMessage = $internationalRecord['irn_error_message'] ?? 'Failed to generate IRN';
-                echo json_encode(['success' => false, 'message' => $errorMessage]);
-            }
-            exit;
-        } else {
-            // Domestic Invoice IRN Generation via DomesticEwbIrnService
             $items = $invoiceModel->getInvoiceItems($invoiceId);
             if (empty($items)) {
-                echo json_encode(['success' => false, 'message' => 'No items found for invoice #' . $invoiceId]);
-                exit;
+                $this->emitEinvoiceJson([
+                    'success' => false,
+                    'message' => 'No items found for invoice #' . $invoiceId,
+                    'errors' => ['No items found for invoice #' . $invoiceId],
+                ]);
             }
 
             $customer = $commanModel->getRecordById('vp_order_info', $invoice['vp_order_info_id'] ?? 0);
@@ -325,20 +432,56 @@ class InvoicesController
             );
 
             if (!empty($result['status']) && $result['status'] === true) {
-                echo json_encode([
+                $this->emitEinvoiceJson([
                     'success' => true,
                     'message' => $result['irn_message'] ?? 'E-Invoice (IRN) generated successfully!',
                     'irn' => $result['irn'] ?? '',
-                    'is_international' => false
-                ]);
-            } else {
-                $errMsg = $result['error_details'] ?? $result['message'] ?? (is_array($result['errors'] ?? null) ? implode('; ', $result['errors']) : 'Failed to generate E-Invoice.');
-                echo json_encode([
-                    'success' => false,
-                    'message' => $errMsg
+                    'is_international' => false,
                 ]);
             }
-            exit;
+
+            $stored = $service->getEwbIrnRecord($invoiceId);
+            $storedResponseErrors = [];
+            if (is_array($stored) && !empty($stored['irn_response'])) {
+                $decodedStored = json_decode((string) $stored['irn_response'], true);
+                if (is_array($decodedStored)) {
+                    $storedResponseErrors = [
+                        $decodedStored['ErrorDetails'] ?? null,
+                        $decodedStored['InfoDtls'] ?? null,
+                        $decodedStored['message'] ?? $decodedStored['Message'] ?? null,
+                    ];
+                }
+            }
+            $errors = $this->flattenEinvoiceErrors([
+                $result['errors'] ?? null,
+                $result['error_details'] ?? null,
+                $result['message'] ?? null,
+                $result['irn_error'] ?? null,
+                $result['ewb_error'] ?? null,
+                is_array($stored) ? ($stored['irn_error'] ?? null) : null,
+                is_array($stored) ? ($stored['ewb_error'] ?? null) : null,
+                $storedResponseErrors,
+            ]);
+            if ($errors === []) {
+                $errors[] = 'Failed to generate E-Invoice.';
+            }
+
+            $this->emitEinvoiceJson([
+                'success' => false,
+                'message' => $errors[0],
+                'errors' => $errors,
+                'error_details' => $result['error_details'] ?? '',
+                'is_international' => false,
+            ]);
+        } catch (Throwable $e) {
+            $this->emitEinvoiceJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'errors' => array_values(array_filter([
+                    $e->getMessage(),
+                    'File: ' . basename($e->getFile()) . ' (line ' . $e->getLine() . ')',
+                ])),
+            ]);
         }
     }
 
@@ -893,6 +1036,13 @@ class InvoicesController
             }
         } catch (Exception $e) {
             error_log("Alankit IRN Exception for invoice #$invoiceId: " . $e->getMessage());
+            try {
+                $invoiceModel->updateInvoiceInternational($invoiceId, [
+                    'irn_status' => 'failed',
+                    'irn_error_message' => $e->getMessage(),
+                ]);
+            } catch (Throwable $ignored) {
+            }
             return false;
         }
     }

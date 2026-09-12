@@ -215,6 +215,26 @@
     </div>
 </div>
 
+<!-- E-Invoice result modal -->
+<div id="einvoiceResultModal" class="fixed inset-0 z-[10070] hidden" aria-hidden="true" role="dialog">
+    <div data-einvoice-modal-backdrop class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+    <div class="relative z-10 mx-auto flex min-h-full max-w-2xl items-center justify-center p-4">
+        <div class="w-full overflow-hidden rounded-2xl bg-white shadow-2xl border border-gray-200">
+            <div id="einvoiceResultHeader" class="flex items-center justify-between px-5 py-3 border-b">
+                <h2 id="einvoiceResultTitle" class="font-semibold text-sm">E-Invoice</h2>
+                <button type="button" data-close-einvoice-modal class="text-xl leading-none px-2 opacity-80 hover:opacity-100">&times;</button>
+            </div>
+            <div id="einvoiceResultBody" class="px-5 py-4 text-sm text-gray-800 max-h-[65vh] overflow-y-auto whitespace-pre-line break-words"></div>
+            <div class="px-5 py-3 border-t border-gray-200 bg-gray-50 flex justify-end">
+                <button type="button" data-close-einvoice-modal class="bg-gray-800 hover:bg-gray-900 text-white font-semibold px-4 py-1.5 rounded text-xs">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="<?php echo htmlspecialchars(base_url('assets/js/pos_message_modal.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 <script>
 window.SINGLE_DISPATCH_PAYLOAD = <?php echo json_encode($single_order_payload ?? null, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE); ?>;
 
@@ -874,13 +894,97 @@ window.SINGLE_DISPATCH_PAYLOAD = <?php echo json_encode($single_order_payload ??
     renderOrderCard();
 })();
 
+function collectEinvoiceErrors(data, fallback) {
+    const lines = [];
+    const push = (value) => {
+        if (value == null || value === false || value === '') {
+            return;
+        }
+        if (Array.isArray(value)) {
+            value.forEach(push);
+            return;
+        }
+        if (typeof value === 'object') {
+            const code = value.ErrorCode || value.error_code || value.ErrorCd || value.errorCode || '';
+            const msg = value.ErrorMessage || value.error_message || value.ErrorMsg || value.ErrorDesc
+                || value.message || value.Message || value.InfMsg || '';
+            if (code || msg) {
+                lines.push((code ? '[' + code + '] ' : '') + msg);
+                return;
+            }
+            Object.keys(value).forEach((key) => push(value[key]));
+            return;
+        }
+        const text = String(value).trim();
+        if (!text) {
+            return;
+        }
+        try {
+            const parsed = JSON.parse(text);
+            if (parsed && typeof parsed === 'object') {
+                push(parsed);
+                return;
+            }
+        } catch (e) {}
+        lines.push(text);
+    };
+
+    push(data && data.errors);
+    push(data && data.error_details);
+    push(data && data.irn_error);
+    push(data && data.irn_error_message);
+    push(data && data.ewb_error);
+    push(data && data.message);
+    if (lines.length === 0) {
+        push(fallback || 'Failed to generate E-Invoice.');
+    }
+
+    return lines.filter((line, idx) => line && lines.indexOf(line) === idx);
+}
+
+function showEinvoiceResultModal(title, lines, tone) {
+    const modal = document.getElementById('einvoiceResultModal');
+    const header = document.getElementById('einvoiceResultHeader');
+    const titleEl = document.getElementById('einvoiceResultTitle');
+    const bodyEl = document.getElementById('einvoiceResultBody');
+    const message = (lines && lines.length) ? lines.join('\n\n') : 'No details returned.';
+
+    if (titleEl) {
+        titleEl.textContent = title;
+    }
+    if (header) {
+        header.className = tone === 'success'
+            ? 'flex items-center justify-between px-5 py-3 border-b bg-emerald-600 text-white'
+            : 'flex items-center justify-between px-5 py-3 border-b bg-red-600 text-white';
+    }
+    if (bodyEl) {
+        bodyEl.textContent = message;
+    }
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+        return;
+    }
+    if (typeof window.showPosMessageModal === 'function') {
+        window.showPosMessageModal({ title: title, message: message, tone: tone === 'success' ? 'success' : 'error' });
+    }
+}
+
+function closeEinvoiceResultModal() {
+    const modal = document.getElementById('einvoiceResultModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+}
+
+document.querySelectorAll('[data-close-einvoice-modal], [data-einvoice-modal-backdrop]').forEach((el) => {
+    el.addEventListener('click', closeEinvoiceResultModal);
+});
+
 function generateEInvoice(invoiceId, btn) {
     if (!invoiceId) {
-        showPosMessageModal({
-            title: 'Error',
-            message: 'Invalid Invoice ID.',
-            tone: 'error'
-        });
+        showEinvoiceResultModal('E-Invoice Error', ['Invalid Invoice ID.'], 'error');
         return;
     }
 
@@ -898,48 +1002,55 @@ function generateEInvoice(invoiceId, btn) {
         },
         body: JSON.stringify({ invoice_id: invoiceId })
     })
-    .then(r => r.json())
-    .then(data => {
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
+    .then(async (response) => {
+        const text = await response.text();
+        let data = null;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            const stripped = String(text || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+            return {
+                success: false,
+                message: 'Server returned a non-JSON response.',
+                errors: [
+                    'HTTP ' + response.status + ' ' + (response.statusText || ''),
+                    stripped !== '' ? stripped.slice(0, 4000) : text.slice(0, 4000)
+                ]
+            };
         }
-        if (data.success) {
-            if (typeof window.showPosMessageModal === 'function') {
-                window.showPosMessageModal({
-                    title: 'E-Invoice Success',
-                    message: data.message || 'E-Invoice (IRN) generated successfully!',
-                    tone: 'success'
-                });
-            } else {
-                alert(data.message || 'E-Invoice (IRN) generated successfully!');
-            }
-        } else {
-            if (typeof window.showPosMessageModal === 'function') {
-                window.showPosMessageModal({
-                    title: 'E-Invoice Generation Failed',
-                    message: data.message || 'Failed to generate E-Invoice.',
-                    tone: 'error'
-                });
-            } else {
-                alert(data.message || 'Failed to generate E-Invoice.');
-            }
-        }
+        return data || { success: false, message: 'Empty response from server.' };
     })
-    .catch(err => {
+    .then((data) => {
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = originalText;
         }
-        if (typeof window.showPosMessageModal === 'function') {
-            window.showPosMessageModal({
-                title: 'Error',
-                message: 'Failed to trigger E-Invoice generation: ' + err.message,
-                tone: 'error'
-            });
-        } else {
-            alert('Failed to trigger E-Invoice generation: ' + err.message);
+        if (data && data.success) {
+            const successLines = [];
+            if (data.message) successLines.push(data.message);
+            if (data.irn) successLines.push('IRN: ' + data.irn);
+            if (successLines.length === 0) {
+                successLines.push('E-Invoice (IRN) generated successfully!');
+            }
+            showEinvoiceResultModal('E-Invoice Generated', successLines, 'success');
+            return;
         }
+        showEinvoiceResultModal(
+            'E-Invoice Generation Failed',
+            collectEinvoiceErrors(data, 'Failed to generate E-Invoice.'),
+            'error'
+        );
+    })
+    .catch((err) => {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+        showEinvoiceResultModal(
+            'E-Invoice Generation Failed',
+            collectEinvoiceErrors({ message: err && err.message }, 'Failed to trigger E-Invoice generation.'),
+            'error'
+        );
     });
 }
 </script>
