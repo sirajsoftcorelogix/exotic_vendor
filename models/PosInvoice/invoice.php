@@ -344,8 +344,31 @@ class POSInvoice
         return $stmt->execute();
     }
 
+    private function ensureEwbColumnsExist(): void
+    {
+        static $checked = false;
+        if ($checked) {
+            return;
+        }
+        $checked = true;
+
+        $checkRes = @$this->db->query("SHOW COLUMNS FROM vp_invoices_international LIKE 'ewb_error_message'");
+        if ($checkRes && $checkRes->num_rows > 0) {
+            return;
+        }
+
+        @$this->db->query("ALTER TABLE vp_invoices_international
+            ADD COLUMN `ewb_no` VARCHAR(50) NULL AFTER `irn_error_message`,
+            ADD COLUMN `ewb_date` DATETIME NULL AFTER `ewb_no`,
+            ADD COLUMN `ewb_valid_till` DATETIME NULL AFTER `ewb_date`,
+            ADD COLUMN `ewb_request_payload` LONGTEXT NULL,
+            ADD COLUMN `ewb_response_payload` LONGTEXT NULL,
+            ADD COLUMN `ewb_error_message` LONGTEXT NULL");
+    }
+
     public function updateInvoiceInternational($invoice_id, $data)
     {
+        $this->ensureEwbColumnsExist();
         $allowedFields = [
             'transport_selection', 'trans_mode', 'veh_no', 'veh_type', 'trans_doc_no', 'trans_doc_dt',
             'trans_id', 'trans_name', 'pre_carriage_by',             'port_of_loading', 'port_of_discharge', 'port_code',
