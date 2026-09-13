@@ -203,9 +203,10 @@ $linePricingMap = is_array($linePricingByLineId ?? null) ? $linePricingByLineId 
                         $lineId = (int)($item['id'] ?? 0);
                         $linePricing = $linePricingMap[$lineId] ?? null;
                         $qty = max(1, (int)($item['quantity'] ?? 1));
+                        $final = (float)($item['finalprice'] ?? 0);
                         $netLineAmount = is_array($linePricing)
                             ? (float)($linePricing['chargeable_value'] ?? 0)
-                            : (float)($item['finalprice'] ?? 0) * $qty;
+                            : ($final > 0 ? $final : ((float)($item['itemprice'] ?? 0) * $qty));
                         $unitPrice = $qty > 0 ? $netLineAmount / $qty : 0.0;
                         $title = trim((string)($item['title'] ?? ''));
                         $addons = order_line_addons_for_display($item['addons'] ?? null);

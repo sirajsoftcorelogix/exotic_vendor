@@ -22,7 +22,9 @@ $total_price = 0;
 $currency = '';
 
 foreach ($order as $items => $item):
-    $total_price += $item['finalprice'] * $item['quantity'];
+    $final = (float)($item['finalprice'] ?? 0);
+    $qty = max(1, (int)($item['quantity'] ?? 1));
+    $total_price += $final > 0 ? $final : ((float)($item['itemprice'] ?? 0) * $qty);
 endforeach;
 $orderremarks = is_array($orderremarks ?? null) ? $orderremarks : [];
 $customerdetails = is_array($customerdetails ?? null) ? $customerdetails : [];
@@ -243,12 +245,18 @@ if ($invoiceIdForReturn > 0) {
                                         </div>
                                         <div class="flex items-center gap-12">
                                             <div class="flex items-center gap-2 text-[13px] text-gray-500">
-                                                <span><?php echo $currencysymbol; ?><?php echo $item['finalprice']; ?> x</span>
-                                                <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700"><?php echo $item['quantity']; ?></span>
+                                                <?php
+                                                    $final = (float)($item['finalprice'] ?? 0);
+                                                    $qty = max(1, (int)($item['quantity'] ?? 1));
+                                                    $unitP = $final > 0 ? round($final / $qty, 2) : (float)($item['itemprice'] ?? 0);
+                                                    $lineP = $final > 0 ? $final : ($unitP * $qty);
+                                                ?>
+                                                <span><?php echo $currencysymbol; ?><?php echo number_format($unitP, 2); ?> x</span>
+                                                <span class="rounded bg-gray-100 px-2 py-0.5 text-gray-700"><?php echo $qty; ?></span>
                                             </div>
 
                                             <div class="w-20 text-right text-[14px] font-bold text-gray-900">
-                                                <?php echo $currencysymbol; ?><?php echo $item['finalprice'] * $item['quantity']; ?>
+                                                <?php echo $currencysymbol; ?><?php echo number_format($lineP, 2); ?>
                                             </div>
                                             <div class="flex-shrink-0 flex flex-col items-end gap-2">
                                                 <span class="rounded-full bg-green-600 px-3 py-1 text-[11px] font-semibold text-white whitespace-nowrap"><?php echo htmlspecialchars($lineStatusLabel); ?></span>

@@ -10,7 +10,9 @@ $currency = '';
 $computedOrderTotal = 0.0;
 foreach ($order as $items => $item) {
     $currency = $item['currency'] ?? $currency;
-    $computedOrderTotal += (float)($item['finalprice'] ?? 0) * max(1, (int)($item['quantity'] ?? 1));
+    $final = (float)($item['finalprice'] ?? 0);
+    $qty = max(1, (int)($item['quantity'] ?? 1));
+    $computedOrderTotal += $final > 0 ? $final : ((float)($item['itemprice'] ?? 0) * $qty);
 }
 $displayOrderTotal = $computedOrderTotal > 0 ? $computedOrderTotal : (float)($orderremarks['total'] ?? 0);
 $countries = country_array();

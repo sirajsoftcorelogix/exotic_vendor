@@ -1,34 +1,44 @@
 <?php
 
 /**
- * vp_orders stores finalprice and itemprice as per-unit GST-inclusive amounts
- * (see pos_payment_resolve_order_total: SUM(finalprice * quantity)).
+ * vp_orders stores finalprice as total line price (already multiplied by quantity)
+ * and itemprice as unit price (or line list price if equal to finalprice).
  */
-
-function pos_order_inclusive_unit_price(array $row, string $kind = 'disc'): float
-{
-    if ($kind === 'disc') {
-        $final = (float)($row['finalprice'] ?? 0);
-        if ($final > 0) {
-            return max(0.0, $final);
-        }
-    }
-
-    $unit = (float)($row['itemprice'] ?? 0);
-    if ($unit > 0) {
-        return max(0.0, $unit);
-    }
-
-    $final = (float)($row['finalprice'] ?? 0);
-
-    return max(0.0, $final);
-}
 
 function pos_order_inclusive_line_total(array $row, string $kind = 'disc'): float
 {
     $qty = max(1, (int)($row['quantity'] ?? 1));
+    if ($kind === 'disc') {
+        $final = (float)($row['finalprice'] ?? 0);
+        if ($final > 0) {
+            return round($final, 2);
+        }
+        $unit = (float)($row['itemprice'] ?? 0);
+        return round($unit * $qty, 2);
+    }
 
-    return round(pos_order_inclusive_unit_price($row, $kind) * $qty, 2);
+    $itemPrice = (float)($row['itemprice'] ?? 0);
+    $finalPrice = (float)($row['finalprice'] ?? 0);
+    if ($itemPrice > 0) {
+        if ($finalPrice > 0 && abs($itemPrice - $finalPrice) < 0.01) {
+            return round($itemPrice, 2);
+        }
+        return round($itemPrice * $qty, 2);
+    }
+
+    if ($finalPrice > 0) {
+        return round($finalPrice, 2);
+    }
+
+    return 0.0;
+}
+
+function pos_order_inclusive_unit_price(array $row, string $kind = 'disc'): float
+{
+    $qty = max(1, (int)($row['quantity'] ?? 1));
+    $lineTotal = pos_order_inclusive_line_total($row, $kind);
+
+    return max(0.0, round($lineTotal / $qty, 4));
 }
 
 function pos_order_pretax_unit_price(array $row, string $kind = 'disc'): float
@@ -262,8 +272,18 @@ function pos_order_line_display_pricing(array $orderRow, array $options = []): a
     }
 
     $listingPriceUnit = round($listInclUnit, 2);
-    $chargeableValue = round($discInclUnit * $qty, 2);
-    $listLineTotal = round($listInclUnit * $qty, 2);
+    $chargeableValue = pos_order_inclusive_line_total($orderRow, 'disc');
+    if (isset($options['disc_incl_unit']) && (float)$options['disc_incl_unit'] > 0) {
+        $chargeableValue = round((float)$options['disc_incl_unit'] * $qty, 2);
+    }
+    $listLineTotal = pos_order_inclusive_line_total($orderRow, 'list');
+    if (isset($options['list_incl_unit']) && (float)$options['list_incl_unit'] > 0) {
+        $listLineTotal = round((float)$options['list_incl_unit'] * $qty, 2);
+    }
+    if ($listLineTotal < $chargeableValue) {
+        $listLineTotal = $chargeableValue;
+    }
+
     $discountAmount = max(0.0, round($listLineTotal - $chargeableValue, 2));
 
     $taxableUnit = $taxRate > 0
@@ -283,7 +303,7 @@ function pos_order_line_display_pricing(array $orderRow, array $options = []): a
         $totalGst = 0.0;
     }
 
-    $finalPriceTotal = round(pos_order_inclusive_unit_price($orderRow, 'disc') * $qty, 2);
+    $finalPriceTotal = $chargeableValue;
 
     return [
         'listing_price_unit' => $listingPriceUnit,
@@ -484,18 +504,14 @@ function pos_order_build_pricing_components(array $orderRow, float $baseListIncl
         $baseName = 'Base item';
     }
 
-    $qty = max(1, (int)($orderRow['quantity'] ?? 1));
-    $rawListUnit = (float)($orderRow['itemprice'] ?? 0);
-    $rawFinalUnit = (float)($orderRow['finalprice'] ?? 0);
-
     if ($baseListIncl <= 0.0) {
-        $baseListIncl = $rawListUnit > 0 ? round($rawListUnit * $qty, 2) : ($rawFinalUnit > 0 ? round($rawFinalUnit * $qty, 2) : 0.0);
+        $baseListIncl = pos_order_inclusive_line_total($orderRow, 'list');
     } else {
         $baseListIncl = round($baseListIncl, 2);
     }
 
     if ($baseDiscIncl <= 0.0) {
-        $baseDiscIncl = $rawFinalUnit > 0 ? round($rawFinalUnit * $qty, 2) : $baseListIncl;
+        $baseDiscIncl = pos_order_inclusive_line_total($orderRow, 'disc');
     }
     if ($baseDiscIncl > $baseListIncl) {
         $baseListIncl = $baseDiscIncl;
@@ -943,12 +959,6 @@ function pos_order_line_discount_lines(array $discountMeta, float $lineAllocated
  */
 function pos_order_line_list_price_incl(array $orderRow): float
 {
-    $qty = max(1, (int)($orderRow['quantity'] ?? 1));
-    $rawListUnit = (float)($orderRow['itemprice'] ?? 0);
-    if ($rawListUnit > 0) {
-        return round($rawListUnit * $qty, 2);
-    }
-
     return pos_order_inclusive_line_total($orderRow, 'list');
 }
 

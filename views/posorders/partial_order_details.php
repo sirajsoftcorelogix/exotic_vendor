@@ -3,7 +3,9 @@
     $total_price = 0;
     $courrency = '';
     foreach ($order as $items => $item):
-        $total_price += (float)($item['finalprice'] ?? 0) * max(1, (int)($item['quantity'] ?? 1));
+        $final = (float)($item['finalprice'] ?? 0);
+        $qty = max(1, (int)($item['quantity'] ?? 1));
+        $total_price += $final > 0 ? $final : ((float)($item['itemprice'] ?? 0) * $qty);
         $currency = $item['currency'] ?? '';
     endforeach;
     ?>
@@ -256,7 +258,7 @@
                             <p><span class="section-title">Currency : </span><span
                                     class="section-value"><?php echo $item['currency']; ?></span></p>
                             <p><span class="section-title">item Total : </span><span
-                                    class="section-value"><?php echo $item['finalprice'] * $item['quantity']; ?></span></p>
+                                    class="section-value"><?php $final = (float)($item['finalprice'] ?? 0); $qty = max(1, (int)($item['quantity'] ?? 1)); echo $final > 0 ? $final : ((float)($item['itemprice'] ?? 0) * $qty); ?></span></p>
 
                         </div>
                         <div>
