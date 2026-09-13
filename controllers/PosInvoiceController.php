@@ -3540,7 +3540,7 @@ class PosInvoiceController
 
         $amountSummary = $this->buildPosInvoiceAmountSummaryRows(
             $posDiscountMeta,
-            round((float)$totalAmount, 2),
+            $summaryGrandTotal,
             $summaryTaxAmount,
             $tableColCount
         );
