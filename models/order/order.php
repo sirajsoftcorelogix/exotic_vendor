@@ -3753,7 +3753,7 @@ class Order
                     ORDER BY osl.id ASC";
 
         $resLogs = $this->db->query($sqlLogs);
-        if ($resLogs) {
+        if ($resLogs && $resLogs !== true) {
             while ($row = $resLogs->fetch_assoc()) {
                 $lineId = (int)$row['order_id'];
                 $apiResp = json_decode((string)($row['api_response'] ?? ''), true);
@@ -3780,14 +3780,14 @@ class Order
             }
         }
 
-        // Strategy 2: Check vp_picklist_items if table exists
-        $hasPicklistTable = false;
-        $checkPicklist = $this->db->query("SHOW TABLES LIKE 'vp_picklist_items'");
+        // Strategy 2: Check vp_picklist_items if table & previous_order_status column exist
+        $hasPicklistCol = false;
+        $checkPicklist = $this->db->query("SHOW COLUMNS FROM `vp_picklist_items` LIKE 'previous_order_status'");
         if ($checkPicklist && $checkPicklist->num_rows > 0) {
-            $hasPicklistTable = true;
+            $hasPicklistCol = true;
         }
 
-        if ($hasPicklistTable) {
+        if ($hasPicklistCol) {
             $sqlPicklist = "SELECT pi.id AS picklist_item_id, pi.order_id, pi.previous_order_status, pi.status AS picklist_status,
                                    o.order_number, o.item_code, o.sku, o.status AS current_status
                             FROM vp_picklist_items pi
@@ -3797,7 +3797,7 @@ class Order
                               AND pi.previous_order_status != ''
                               AND pi.previous_order_status != 'pending'";
             $resPicklist = $this->db->query($sqlPicklist);
-            if ($resPicklist) {
+            if ($resPicklist && $resPicklist !== true) {
                 while ($pRow = $resPicklist->fetch_assoc()) {
                     $lineId = (int)$pRow['order_id'];
                     $prevStatus = strtolower(trim((string)$pRow['previous_order_status']));
@@ -3820,23 +3820,26 @@ class Order
         $hasPoItems = false;
         $checkPo = $this->db->query("SHOW TABLES LIKE 'vp_po_items'");
         if ($checkPo && $checkPo->num_rows > 0) {
-            $hasPoItems = true;
+            $checkPurchaseOrders = $this->db->query("SHOW TABLES LIKE 'purchase_orders'");
+            if ($checkPurchaseOrders && $checkPurchaseOrders->num_rows > 0) {
+                $hasPoItems = true;
+            }
         }
 
         if ($hasPoItems) {
             $sqlPo = "SELECT pi.id AS po_item_id, p.status AS po_status, o.id AS line_id, o.order_number, o.item_code, o.sku, o.status AS current_status
                       FROM vp_po_items pi
                       JOIN purchase_orders p ON p.id = pi.purchase_orders_id
-                      JOIN vp_orders o ON o.order_number = CAST(pi.order_number AS CHAR)
+                      JOIN vp_orders o ON (o.po_id = p.id OR (pi.order_number IS NOT NULL AND pi.order_number > 0 AND o.order_number = CAST(pi.order_number AS CHAR)))
                       WHERE o.status = 'pending'
                         AND p.status IS NOT NULL
                         AND p.status != ''";
             $resPo = $this->db->query($sqlPo);
-            if ($resPo) {
+            if ($resPo && $resPo !== true) {
                 while ($poRow = $resPo->fetch_assoc()) {
                     $lineId = (int)$poRow['line_id'];
                     $poStatus = strtolower(trim((string)$poRow['po_status']));
-                    if ($poStatus !== '' && !isset($candidatesMap[$lineId])) {
+                    if ($poStatus !== '' && $poStatus !== 'pending' && !isset($candidatesMap[$lineId])) {
                         $candidatesMap[$lineId] = [
                             'line_id' => $lineId,
                             'order_number' => (string)($poRow['order_number'] ?? ''),

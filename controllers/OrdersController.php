@@ -708,158 +708,182 @@ class OrdersController
     {
         is_login();
         $this->clearBufferedHttpOutput();
-        header('Content-Type: application/json; charset=utf-8');
-
-        global $ordersModel;
-
-        $input = json_decode((string)file_get_contents('php://input'), true);
-        if (!is_array($input)) {
-            $input = array_merge($_GET, $_POST);
+        ob_start();
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
         }
 
-        $op = trim((string)($input['op'] ?? 'run'));
-        $userId = (int)($_SESSION['user']['id'] ?? 0);
+        try {
+            global $ordersModel;
 
-        $parseIds = static function ($raw): array {
-            if (is_array($raw)) {
-                $parts = $raw;
-            } else {
-                $parts = preg_split('/[\s,]+/', (string)$raw) ?: [];
+            $input = json_decode((string)file_get_contents('php://input'), true);
+            if (!is_array($input)) {
+                $input = array_merge($_GET, $_POST);
             }
-            $out = [];
-            foreach ($parts as $part) {
-                $part = trim((string)$part);
-                if ($part !== '') {
-                    $out[] = $part;
+
+            $op = trim((string)($input['op'] ?? 'run'));
+            $userId = (int)($_SESSION['user']['id'] ?? 0);
+
+            $parseIds = static function ($raw): array {
+                if (is_array($raw)) {
+                    $parts = $raw;
+                } else {
+                    $parts = preg_split('/[\s,]+/', (string)$raw) ?: [];
                 }
+                $out = [];
+                foreach ($parts as $part) {
+                    $part = trim((string)$part);
+                    if ($part !== '') {
+                        $out[] = $part;
+                    }
+                }
+                return array_values(array_unique($out));
+            };
+
+            if ($op === 'count') {
+                $this->clearBufferedHttpOutput();
+                echo json_encode([
+                    'success' => true,
+                    'total' => $ordersModel->countNonTerminalOrdersForStatusSync(),
+                ]);
+                exit;
             }
-            return array_values(array_unique($out));
-        };
 
-        if ($op === 'count') {
-            echo json_encode([
-                'success' => true,
-                'total' => $ordersModel->countNonTerminalOrdersForStatusSync(),
-            ]);
-            exit;
-        }
+            if ($op === 'candidates') {
+                $mode = trim((string)($input['mode'] ?? 'partial'));
+                $specific = $parseIds($input['order_id'] ?? $input['orderid'] ?? $input['order'] ?? $input['order_numbers'] ?? []);
+                $limit = isset($input['limit']) ? max(1, min(100000, (int)$input['limit'])) : 250;
+                if ($mode === 'specific' || $specific !== []) {
+                    $orderNumbers = $specific;
+                    $oldest = null;
+                } else {
+                    $rows = $ordersModel->getNonTerminalOrdersForStatusSync($mode === 'all' ? 0 : $limit);
+                    $orderNumbers = [];
+                    foreach ($rows as $row) {
+                        $orderNumbers[] = (string)$row['order_number'];
+                    }
+                    $oldest = $rows[0]['order_date'] ?? null;
+                }
+                $this->clearBufferedHttpOutput();
+                echo json_encode([
+                    'success' => true,
+                    'mode' => $mode,
+                    'total' => count($orderNumbers),
+                    'oldest_order_date' => $oldest,
+                    'pending_total' => $ordersModel->countNonTerminalOrdersForStatusSync(),
+                    'order_numbers' => $orderNumbers,
+                ]);
+                exit;
+            }
 
-        if ($op === 'candidates') {
-            $mode = trim((string)($input['mode'] ?? 'partial'));
-            $specific = $parseIds($input['order_id'] ?? $input['orderid'] ?? $input['order'] ?? $input['order_numbers'] ?? []);
-            $limit = isset($input['limit']) ? max(1, min(100000, (int)$input['limit'])) : 250;
-            if ($mode === 'specific' || $specific !== []) {
-                $orderNumbers = $specific;
-                $oldest = null;
+            if ($op === 'sync_batch') {
+                $orderNumbers = $parseIds($input['order_numbers'] ?? $input['order_id'] ?? []);
+                $dryRun = !empty($input['dry_run']);
+                $summary = $ordersModel->syncOrderStatusFromVendorApiBatch($orderNumbers, $dryRun, $userId);
+                $this->clearBufferedHttpOutput();
+                echo json_encode([
+                    'success' => true,
+                    'dry_run' => $dryRun,
+                    'summary' => $summary,
+                ]);
+                exit;
+            }
+
+            if ($op === 'recover_overrides') {
+                $dryRun = !empty($input['dry_run']);
+                $summary = $ordersModel->recoverOverriddenOrderStatuses($dryRun, $userId);
+                $this->clearBufferedHttpOutput();
+                echo json_encode([
+                    'success' => true,
+                    'dry_run' => $dryRun,
+                    'summary' => $summary,
+                ]);
+                exit;
+            }
+
+            $dryRun = !empty($input['dry_run']);
+            $limit = isset($input['limit']) ? max(1, min(100000, (int)$input['limit'])) : 500;
+            $batchSize = isset($input['batch_size']) ? max(1, min(200, (int)$input['batch_size'])) : 50;
+            $specificOrders = $parseIds($input['order_id'] ?? $input['orderid'] ?? $input['order'] ?? '');
+            $mode = trim((string)($input['mode'] ?? ($specificOrders !== [] ? 'specific' : 'partial')));
+
+            if ($specificOrders !== [] || $mode === 'specific') {
+                $orderNumbers = $specificOrders;
             } else {
                 $rows = $ordersModel->getNonTerminalOrdersForStatusSync($mode === 'all' ? 0 : $limit);
                 $orderNumbers = [];
-                foreach ($rows as $row) {
-                    $orderNumbers[] = (string)$row['order_number'];
+                foreach ($rows as $cand) {
+                    $orderNumbers[] = $cand['order_number'];
                 }
-                $oldest = $rows[0]['order_date'] ?? null;
             }
-            echo json_encode([
-                'success' => true,
-                'mode' => $mode,
-                'total' => count($orderNumbers),
-                'oldest_order_date' => $oldest,
-                'pending_total' => $ordersModel->countNonTerminalOrdersForStatusSync(),
-                'order_numbers' => $orderNumbers,
-            ]);
-            exit;
-        }
 
-        if ($op === 'sync_batch') {
-            $orderNumbers = $parseIds($input['order_numbers'] ?? $input['order_id'] ?? []);
-            $dryRun = !empty($input['dry_run']);
+            if (empty($orderNumbers)) {
+                $this->clearBufferedHttpOutput();
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'No non-terminal orders found awaiting status sync.',
+                    'summary' => [
+                        'checked_orders' => 0,
+                        'updated_lines' => 0,
+                        'unchanged_lines' => 0,
+                        'skipped_lines' => 0,
+                        'details' => [],
+                        'errors' => []
+                    ]
+                ]);
+                exit;
+            }
+
+            $chunks = array_chunk($orderNumbers, $batchSize);
+            $totalChecked = 0;
+            $totalUpdated = 0;
+            $totalUnchanged = 0;
+            $totalSkipped = 0;
+            $allDetails = [];
+            $allErrors = [];
+
+            foreach ($chunks as $chunk) {
+                $res = $ordersModel->syncOrderStatusFromVendorApiBatch($chunk, $dryRun, $userId);
+                $totalChecked += $res['checked_orders'];
+                $totalUpdated += $res['updated_lines'];
+                $totalUnchanged += $res['unchanged_lines'];
+                $totalSkipped += $res['skipped_lines'];
+
+                if (!empty($res['details'])) {
+                    $allDetails = array_merge($allDetails, $res['details']);
+                }
+                if (!empty($res['errors'])) {
+                    $allErrors = array_merge($allErrors, $res['errors']);
+                }
+            }
+
+            $this->clearBufferedHttpOutput();
             echo json_encode([
                 'success' => true,
                 'dry_run' => $dryRun,
-                'summary' => $ordersModel->syncOrderStatusFromVendorApiBatch($orderNumbers, $dryRun, $userId),
-            ]);
-            exit;
-        }
-
-        if ($op === 'recover_overrides') {
-            $dryRun = !empty($input['dry_run']);
-            echo json_encode([
-                'success' => true,
-                'dry_run' => $dryRun,
-                'summary' => $ordersModel->recoverOverriddenOrderStatuses($dryRun, $userId),
-            ]);
-            exit;
-        }
-
-        $dryRun = !empty($input['dry_run']);
-        $limit = isset($input['limit']) ? max(1, min(100000, (int)$input['limit'])) : 500;
-        $batchSize = isset($input['batch_size']) ? max(1, min(200, (int)$input['batch_size'])) : 50;
-        $specificOrders = $parseIds($input['order_id'] ?? $input['orderid'] ?? $input['order'] ?? '');
-        $mode = trim((string)($input['mode'] ?? ($specificOrders !== [] ? 'specific' : 'partial')));
-
-        if ($specificOrders !== [] || $mode === 'specific') {
-            $orderNumbers = $specificOrders;
-        } else {
-            $rows = $ordersModel->getNonTerminalOrdersForStatusSync($mode === 'all' ? 0 : $limit);
-            $orderNumbers = [];
-            foreach ($rows as $cand) {
-                $orderNumbers[] = $cand['order_number'];
-            }
-        }
-
-        if (empty($orderNumbers)) {
-            echo json_encode([
-                'success' => true,
-                'message' => 'No non-terminal orders found awaiting status sync.',
+                'message' => "Order status sync completed. Checked {$totalChecked} orders; {$totalUpdated} line(s) updated/changed.",
                 'summary' => [
-                    'checked_orders' => 0,
-                    'updated_lines' => 0,
-                    'unchanged_lines' => 0,
-                    'skipped_lines' => 0,
-                    'details' => [],
-                    'errors' => []
+                    'checked_orders' => $totalChecked,
+                    'updated_lines' => $totalUpdated,
+                    'unchanged_lines' => $totalUnchanged,
+                    'skipped_lines' => $totalSkipped,
+                    'details' => $allDetails,
+                    'errors' => $allErrors
                 ]
             ]);
             exit;
-        }
-
-        $chunks = array_chunk($orderNumbers, $batchSize);
-        $totalChecked = 0;
-        $totalUpdated = 0;
-        $totalUnchanged = 0;
-        $totalSkipped = 0;
-        $allDetails = [];
-        $allErrors = [];
-
-        foreach ($chunks as $chunk) {
-            $res = $ordersModel->syncOrderStatusFromVendorApiBatch($chunk, $dryRun, $userId);
-            $totalChecked += $res['checked_orders'];
-            $totalUpdated += $res['updated_lines'];
-            $totalUnchanged += $res['unchanged_lines'];
-            $totalSkipped += $res['skipped_lines'];
-
-            if (!empty($res['details'])) {
-                $allDetails = array_merge($allDetails, $res['details']);
+        } catch (\Throwable $e) {
+            $this->clearBufferedHttpOutput();
+            if (!headers_sent()) {
+                http_response_code(500);
+                header('Content-Type: application/json; charset=utf-8');
             }
-            if (!empty($res['errors'])) {
-                $allErrors = array_merge($allErrors, $res['errors']);
-            }
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+            exit;
         }
-
-        echo json_encode([
-            'success' => true,
-            'dry_run' => $dryRun,
-            'message' => "Order status sync completed. Checked {$totalChecked} orders; {$totalUpdated} line(s) updated/changed.",
-            'summary' => [
-                'checked_orders' => $totalChecked,
-                'updated_lines' => $totalUpdated,
-                'unchanged_lines' => $totalUnchanged,
-                'skipped_lines' => $totalSkipped,
-                'details' => $allDetails,
-                'errors' => $allErrors
-            ]
-        ]);
-        exit;
     }
 
     /**
