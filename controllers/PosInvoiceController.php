@@ -3492,7 +3492,7 @@ class PosInvoiceController
             if ($showDiscPriceColumn) {
                 $summaryrows .= '
                     <tr style="background: #e8e8e8; border-top: 2px solid #000;">
-                        <td colspan="4" class="right bold">Total:</td>
+                        <td colspan="4" class="right bold">Total1:</td>
                         <td class="right bold">' . number_format($totalTaxableAmt, 2) . '</td>
                         <td class="right bold">' . $totalQuantity . '</td>
                         <td class="right bold"></td>
@@ -3501,13 +3501,13 @@ class PosInvoiceController
                         <td class="right bold">' . number_format($totalCgstAmt, 2) . '</td>
                         <td class="right bold"></td>
                         <td class="right bold">' . number_format($totalIgstAmt, 2) . '</td>
-                        <td class="right bold">' . number_format($totalAmount, 2) . '</td>
+                        <td class="right bold">' . number_format($tableLineTotal, 2) . '</td>
                     </tr>
                 ';
             } else {
                 $summaryrows .= '
                     <tr style="background: #e8e8e8; border-top: 2px solid #000;">
-                        <td colspan="3" class="right bold">Total:</td>
+                        <td colspan="3" class="right bold">Total2:</td>
                         <td class="right bold">' . number_format($totalTaxableAmt, 2) . '</td>
                         <td class="right bold">' . $totalQuantity . '</td>
                         <td class="right bold"></td>
@@ -3516,14 +3516,14 @@ class PosInvoiceController
                         <td class="right bold">' . number_format($totalCgstAmt, 2) . '</td>
                         <td class="right bold"></td>
                         <td class="right bold">' . number_format($totalIgstAmt, 2) . '</td>
-                        <td class="right bold">' . number_format($totalAmount, 2) . '</td>
+                        <td class="right bold">' . number_format($tableLineTotal, 2) . '</td>
                     </tr>
                 ';
             }
         } else {
             $summaryrows .= '
                     <tr style="background: #e8e8e8; border-top: 2px solid #000;">
-                        <td colspan="4" class="right bold">Total:</td>
+                        <td colspan="4" class="right bold">Total3:</td>
                         <td class="right bold">' . $totalQuantity . '</td>
                         <td class="right bold">' . number_format($totalTaxableAmt, 2) . '</td>
                         <td class="right bold"></td>
@@ -3532,7 +3532,7 @@ class PosInvoiceController
                         <td class="right bold">' . number_format($totalCgstAmt, 2) . '</td>
                         <td class="right bold"></td>
                         <td class="right bold">' . number_format($totalIgstAmt, 2) . '</td>
-                        <td class="right bold">' . number_format($totalAmount, 2) . '</td>
+                        <td class="right bold">' . number_format($tableLineTotal, 2) . '</td>
                     </tr>
             ';
         }
