@@ -2055,6 +2055,162 @@ class DispatchController {
     }
 
     /**
+     * Export selected order items to Excel manifest (.xlsx), enforcing status 'ready_for_dispatch'.
+     * Auto-creates POS invoices for selected orders if not already invoiced.
+     */
+    public function exportBulkDispatchExcel(): void
+    {
+        is_login();
+        global $ordersModel, $invoiceModel, $commanModel, $conn;
+
+        require_once __DIR__ . '/../helpers/dispatch/bulk_dispatch_excel_export.php';
+        require_once __DIR__ . '/../helpers/invoice/InvoiceRequestBuilder.php';
+        require_once __DIR__ . '/../helpers/invoice/InvoiceCreationService.php';
+        require_once __DIR__ . '/../helpers/invoice/invoice_gst.php';
+        require_once __DIR__ . '/../helpers/app_settings.php';
+
+        $rawIds = $_REQUEST['order_ids'] ?? $_REQUEST['poitem'] ?? $_REQUEST['import_ids'] ?? null;
+        if (is_string($rawIds)) {
+            $itemIds = array_values(array_filter(array_map('intval', explode(',', $rawIds))));
+        } else if (is_array($rawIds)) {
+            $itemIds = array_values(array_filter(array_map('intval', $rawIds)));
+        } else {
+            $input = json_decode((string)file_get_contents('php://input'), true);
+            $itemIds = array_values(array_filter(array_map('intval', $input['order_ids'] ?? [])));
+        }
+
+        if (empty($itemIds)) {
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode(['success' => false, 'message' => 'No order items selected for dispatch export.']);
+            exit;
+        }
+
+        $orderItems = $ordersModel->getOrdersByIds($itemIds);
+        if (!is_array($orderItems) || $orderItems === []) {
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode(['success' => false, 'message' => 'Selected order items not found.']);
+            exit;
+        }
+
+        // Validate status: ONLY ready_for_dispatch allowed
+        $validItems = [];
+        $blockedItems = [];
+        foreach ($orderItems as $item) {
+            $st = strtolower(trim((string)($item['status'] ?? '')));
+            if ($st !== 'ready_for_dispatch') {
+                $blockedItems[] = 'Item Code: ' . ($item['item_code'] ?? $item['id']) . ' (Status: ' . ($item['status'] ?? 'unknown') . ')';
+            } else {
+                $validItems[] = $item;
+            }
+        }
+
+        if ($validItems === []) {
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode([
+                'success' => false,
+                'message' => 'None of the selected items have status "Ready for Dispatch". Blocked: ' . implode(', ', $blockedItems)
+            ]);
+            exit;
+        }
+
+        // Group by order_number
+        $groupedByOrder = [];
+        foreach ($validItems as $item) {
+            $onum = trim((string)($item['order_number'] ?? ''));
+            if ($onum !== '') {
+                $groupedByOrder[$onum][] = $item;
+            }
+        }
+
+        $batchNo = 'BATCH-' . date('YmdHis') . '-' . mt_rand(1000, 9999);
+        $invoiceService = new InvoiceCreationService($conn, $invoiceModel, $ordersModel, $commanModel);
+        $exportRows = [];
+
+        foreach ($groupedByOrder as $orderNumber => $lines) {
+            $firstLine = $lines[0];
+            $customerId = (int)($firstLine['customer_id'] ?? 0);
+            $orderInfo = $ordersModel->getRemarksByOrderNumber($orderNumber);
+            $vpOrderInfoId = is_array($orderInfo) && isset($orderInfo['id']) ? (int)$orderInfo['id'] : 0;
+            $customer = $customerId > 0 ? $commanModel->getRecordById('vp_customers', $customerId) : null;
+
+            // Check if active invoice already exists
+            $existingInv = $invoiceModel->getActiveInvoiceForOrderNumber($orderNumber);
+            $invoiceNumber = '';
+            $invoiceDate = date('Y-m-d');
+
+            if (is_array($existingInv) && !empty($existingInv['id'])) {
+                $invoiceNumber = (string)($existingInv['invoice_number'] ?? '');
+                $invoiceDate = (string)($existingInv['invoice_date'] ?? date('Y-m-d'));
+            } else {
+                // Auto-create invoice using POS Invoice Service
+                $useIgst = invoice_order_info_uses_igst(is_array($orderInfo) ? $orderInfo : null, app_setting_firm_details());
+                $headerOverrides = [
+                    'customer_id' => $customerId,
+                    'vp_order_info_id' => $vpOrderInfoId,
+                    'batch_no' => $batchNo,
+                    'status' => 'final',
+                    'created_by' => (int)($_SESSION['user']['id'] ?? 0),
+                ];
+                $invReq = InvoiceRequestBuilder::fromOrderLines($lines, $headerOverrides, [
+                    'source' => 'dispatch_excel',
+                    'duplicate_order_check' => true,
+                    'update_order_invoice_id' => true,
+                    'update_order_by' => 'vp_order_id',
+                    'pos_flag' => 0,
+                    'use_igst' => $useIgst,
+                ]);
+                $invRes = $invoiceService->create($invReq);
+                if (!empty($invRes['success'])) {
+                    $invoiceNumber = (string)($invRes['invoice_number'] ?? '');
+                }
+            }
+
+            // Customer / shipping address details
+            $custName = is_array($customer) ? trim(($customer['first_name'] ?? '') . ' ' . ($customer['last_name'] ?? '')) : '';
+            $custAddress = is_array($orderInfo) ? $orderInfo : [];
+
+            foreach ($lines as $lineIndex => $line) {
+                $qty = max(1, (int)($line['quantity'] ?? 1));
+                $gst = (float)($line['gst'] ?? 0);
+                $pretax = pos_order_pretax_unit_price($line, 'disc');
+                $lineTotal = round(($pretax * $qty) * (1 + ($gst / 100)), 2);
+
+                $exportRows[] = [
+                    'batch_no' => $batchNo,
+                    'order_number' => $orderNumber,
+                    'invoice_number' => $invoiceNumber,
+                    'invoice_date' => $invoiceDate,
+                    'customer_id' => $customerId,
+                    'customer_name' => $custName,
+                    'shipping_name' => trim(($custAddress['shipping_first_name'] ?? '') . ' ' . ($custAddress['shipping_last_name'] ?? '')),
+                    'address1' => $custAddress['shipping_address_line1'] ?? '',
+                    'address2' => $custAddress['shipping_address_line2'] ?? '',
+                    'city' => $custAddress['shipping_city'] ?? '',
+                    'state' => $custAddress['shipping_state'] ?? '',
+                    'country' => $custAddress['shipping_country'] ?? '',
+                    'zipcode' => $custAddress['shipping_zipcode'] ?? '',
+                    'phone' => $custAddress['shipping_mobile'] ?? $custAddress['mobile'] ?? '',
+                    'email' => $custAddress['shipping_email'] ?? '',
+                    'item_code' => $line['item_code'] ?? $line['sku'] ?? '',
+                    'title' => $line['title'] ?? 'Product',
+                    'quantity' => $qty,
+                    'unit_price' => $pretax,
+                    'gst_rate' => $gst,
+                    'line_total' => $lineTotal,
+                    'payment_mode' => strtolower((string)($line['payment_type'] ?? '')) === 'cod' ? 'COD' : 'Prepaid',
+                    'box_no' => '1',
+                    'box_size' => 'R-1',
+                    'weight' => (float)($line['product_weight'] ?? 0),
+                    'dimensions' => '',
+                    'courier_company_id' => 'Standard Courier',
+                ];
+            }
+        }
+
+        generateBulkDispatchExcel($exportRows, 'bulk_dispatch_' . date('Ymd_His') . '.xlsx');
+    }
+
+    /**
      * Export Blue Dart–selected bulk dispatch boxes to Excel (one sheet per service family: Air / Surface).
      */
     public function exportBlueDartExcel(): void
@@ -2204,6 +2360,21 @@ class DispatchController {
                         continue;
                     }
                 }
+
+                // Filter items to ensure only 'ready_for_dispatch' items proceed
+                $readyOrders = [];
+                foreach ($orders as $oRow) {
+                    $st = strtolower(trim((string)($oRow['status'] ?? '')));
+                    if ($st !== 'ready_for_dispatch') {
+                        $errors[] = "Order #{$order_number} Item #{$oRow['item_code']}: status is '{$oRow['status']}'. Only items with status 'Ready for Dispatch' can be invoiced or dispatched.";
+                        continue;
+                    }
+                    $readyOrders[] = $oRow;
+                }
+                if (empty($readyOrders)) {
+                    continue;
+                }
+                $orders = $readyOrders;
 
                 // Get vp_order_info for address (getDispatchAddress uses vp_order_info id, not vp_orders id)
                 $orderInfo = $ordersModel->getRemarksByOrderNumber($order_number);

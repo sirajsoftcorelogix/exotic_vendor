@@ -1395,12 +1395,13 @@ class Order
             }
 
             $status = strtolower(trim((string)($row['status'] ?? '')));
-            if (in_array($status, $blockedStatuses, true)) {
+            if ($status !== 'ready_for_dispatch') {
                 $blocked[] = [
                     'order_id' => $itemId,
                     'order_number' => $orderNumber,
                     'item_code' => trim((string)($row['item_code'] ?? $row['sku'] ?? '')),
                     'status' => $status,
+                    'message' => "Item status is '{$status}'. Only items with status 'Ready for Dispatch' can be invoiced or dispatched.",
                 ];
                 continue;
             }
@@ -1490,13 +1491,13 @@ class Order
                 if ($itemId <= 0) {
                     continue;
                 }
-                if ($hasInvoice || in_array($status, ['cancelled', 'returned', 'shipped'], true)) {
+                if ($hasInvoice || $status !== 'ready_for_dispatch') {
                     $blocked[] = [
                         'order_id' => $itemId,
                         'order_number' => $orderNumber,
                         'item_code' => $itemCode,
                         'status' => $hasInvoice ? 'invoiced' : $status,
-                        'message' => $hasInvoice ? 'Already invoiced' : ('Status is ' . $status),
+                        'message' => $hasInvoice ? 'Already invoiced' : "Item status is '{$status}'. Only items with status 'Ready for Dispatch' can be invoiced or dispatched.",
                     ];
                     continue;
                 }
