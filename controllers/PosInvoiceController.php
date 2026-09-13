@@ -3492,7 +3492,7 @@ class PosInvoiceController
             if ($showDiscPriceColumn) {
                 $summaryrows .= '
                     <tr style="background: #e8e8e8; border-top: 2px solid #000;">
-                        <td colspan="4" class="right bold">Total1:</td>
+                        <td colspan="4" class="right bold">Total:</td>
                         <td class="right bold">' . number_format($totalTaxableAmt, 2) . '</td>
                         <td class="right bold">' . $totalQuantity . '</td>
                         <td class="right bold"></td>
@@ -3507,7 +3507,7 @@ class PosInvoiceController
             } else {
                 $summaryrows .= '
                     <tr style="background: #e8e8e8; border-top: 2px solid #000;">
-                        <td colspan="3" class="right bold">Total2:</td>
+                        <td colspan="3" class="right bold">Total:</td>
                         <td class="right bold">' . number_format($totalTaxableAmt, 2) . '</td>
                         <td class="right bold">' . $totalQuantity . '</td>
                         <td class="right bold"></td>
@@ -3523,7 +3523,7 @@ class PosInvoiceController
         } else {
             $summaryrows .= '
                     <tr style="background: #e8e8e8; border-top: 2px solid #000;">
-                        <td colspan="4" class="right bold">Total3:</td>
+                        <td colspan="4" class="right bold">Total:</td>
                         <td class="right bold">' . $totalQuantity . '</td>
                         <td class="right bold">' . number_format($totalTaxableAmt, 2) . '</td>
                         <td class="right bold"></td>
@@ -3562,7 +3562,7 @@ class PosInvoiceController
             $summaryrows .= '
                     <tr style="background: #f0f0f0; border-top: 2px solid #000;">
                         <td colspan="' . ($tableColCount - 1) . '" class="right bold" style="text-align: right;">' . $grandTotalLabel . ':</td>                      
-                        <td class="right bold" style="border: 1px solid #000; padding: 8px;">' . number_format($totalAmount, 2) . '</td>
+                        <td class="right bold" style="border: 1px solid #000; padding: 8px;">Rs-' . number_format($totalAmount, 2) . '</td>
                     </tr>
         ';
         }
