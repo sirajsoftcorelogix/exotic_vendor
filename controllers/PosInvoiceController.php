@@ -3540,13 +3540,13 @@ class PosInvoiceController
 
         $amountSummary = $this->buildPosInvoiceAmountSummaryRows(
             $posDiscountMeta,
-            $summaryGrandTotal,
+            $totalAmount,
             $summaryTaxAmount,
             $tableColCount
         );
         if ($amountSummary !== '') {
             $summaryrows .= $amountSummary;
-            $totalAmount = $summaryGrandTotal;
+            //$totalAmount = $summaryGrandTotal;
         } else {
             if ($discount > 0) {
                 $summaryrows .= '
@@ -3562,7 +3562,7 @@ class PosInvoiceController
             $summaryrows .= '
                     <tr style="background: #f0f0f0; border-top: 2px solid #000;">
                         <td colspan="' . ($tableColCount - 1) . '" class="right bold" style="text-align: right;">' . $grandTotalLabel . ':</td>                      
-                        <td class="right bold" style="border: 1px solid #000; padding: 8px;">Rs-' . number_format($totalAmount, 2) . '</td>
+                        <td class="right bold" style="border: 1px solid #000; padding: 8px;">' . number_format($totalAmount, 2) . '</td>
                     </tr>
         ';
         }
