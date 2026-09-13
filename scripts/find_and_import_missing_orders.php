@@ -388,7 +388,7 @@ if (count($completelyMissingOrders) > 0) {
 
         $totalAmt = 0.0;
         foreach ($cart as $item) {
-            $qty = (float) ($item['qty'] ?? 1);
+            $qty = (float) ($item['quantity'] ?? $item['qty'] ?? 1);
             $price = (float) ($item['finalprice'] ?? $item['itemprice'] ?? 0);
             $totalAmt += ($qty * $price);
         }
@@ -411,7 +411,7 @@ if (count($completelyMissingOrders) > 0) {
                 if (strlen($title) > 40) {
                     $title = substr($title, 0, 37) . '...';
                 }
-                $qty = (float) ($item['qty'] ?? 1);
+                $qty = (float) ($item['quantity'] ?? $item['qty'] ?? 1);
                 echo sprintf("     Line %d: [%s] x%.0f - %s\n", $idx + 1, $code, $qty, $title);
             }
         }

@@ -464,7 +464,7 @@ class VendorsController {
 					'finalprice' => $item['finalprice'] ?? '',
 					'image' => $item['image'] ?? '',
 					'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
-					'quantity' => $item['qty'] ?? '',
+					'quantity' => $item['quantity'] ?? $item['qty'] ?? 1,
 					'options' => $item['options'] ?? 0,
 					'gst' => $item['gst'] ?? '',
 					'hsn' => $item['hscode'] ?? '',
