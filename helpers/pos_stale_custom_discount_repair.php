@@ -126,7 +126,8 @@ function pos_stale_custom_discount_compute_net(array $lines, array $orderInfo): 
     $subtotal = 0.0;
     foreach ($lines as $line) {
         $qty = max(1, (int)($line['quantity'] ?? 1));
-        $subtotal += round((float)($line['finalprice'] ?? 0) * $qty, 2);
+        $final = (float)($line['finalprice'] ?? 0);
+        $subtotal += $final > 0 ? round($final, 2) : round((float)($line['itemprice'] ?? 0) * $qty, 2);
     }
 
     $reductions = round(

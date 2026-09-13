@@ -184,11 +184,13 @@ function pos_payment_resolve_order_total(mysqli $conn, string $orderNumber): flo
                 }
                 $activeCount++;
                 $qty = max(1, (int)($line['quantity'] ?? 1));
-                $unit = (float)($line['finalprice'] ?? 0);
-                if ($unit <= 0) {
+                $final = (float)($line['finalprice'] ?? 0);
+                if ($final > 0) {
+                    $gross += round($final, 2);
+                } else {
                     $unit = (float)($line['itemprice'] ?? 0);
+                    $gross += round($unit * $qty, 2);
                 }
-                $gross += round($unit * $qty, 2);
 
                 if (!empty($line['addons'])) {
                     foreach (Order::parseVendorOrderLineAddonsList($line['addons']) as $addonItem) {

@@ -22,7 +22,9 @@ $total_price = 0;
 $currency = '';
 
 foreach ($order as $items => $item):
-    $total_price += (float)($item['finalprice'] ?? 0) * max(1, (int)($item['quantity'] ?? 1));
+    $final = (float)($item['finalprice'] ?? 0);
+    $qty = max(1, (int)($item['quantity'] ?? 1));
+    $total_price += $final > 0 ? $final : ((float)($item['itemprice'] ?? 0) * $qty);
 endforeach;
 $orderremarks = is_array($orderremarks ?? null) ? $orderremarks : [];
 $customerdetails = is_array($customerdetails ?? null) ? $customerdetails : [];
@@ -615,13 +617,27 @@ $proformaPrintDisabledReason = $canPrintProforma
                         $currencysymbol = vendor_currency_symbol($item['currency'] ?? $orderCurrencyCode);
                         $linePricing = ($linePricingByLineId ?? [])[(int)($item['id'] ?? 0)] ?? null;
                         $qty = max(1, (int)($item['quantity'] ?? 1));
-                        $unitListPrice = (float)($item['itemprice'] ?? 0);
-                        $unitFinalPrice = (float)($item['finalprice'] ?? 0);
-                        if ($unitListPrice <= 0) {
-                            $unitListPrice = $unitFinalPrice;
+                        $rawListPrice = (float)($item['itemprice'] ?? 0);
+                        $rawFinalPrice = (float)($item['finalprice'] ?? 0);
+                        if ($rawFinalPrice > 0) {
+                            $netLineAmount = $rawFinalPrice;
+                            $unitFinalPrice = round($rawFinalPrice / $qty, 2);
+                        } else {
+                            $unitFinalPrice = $rawListPrice;
+                            $netLineAmount = round($rawListPrice * $qty, 2);
                         }
-                        $listLineAmount = $unitListPrice * $qty;
-                        $netLineAmount = $unitFinalPrice * $qty;
+                        if ($rawListPrice > 0) {
+                            if ($rawFinalPrice > 0 && abs($rawListPrice - $rawFinalPrice) < 0.01) {
+                                $listLineAmount = $rawListPrice;
+                                $unitListPrice = round($rawListPrice / $qty, 2);
+                            } else {
+                                $unitListPrice = $rawListPrice;
+                                $listLineAmount = round($rawListPrice * $qty, 2);
+                            }
+                        } else {
+                            $unitListPrice = $unitFinalPrice;
+                            $listLineAmount = $netLineAmount;
+                        }
                         $lineAddons = order_line_addons_for_display($item['addons'] ?? null);
                         $lineId = (int)($item['id'] ?? 0);
                         $itemMaterial = trim((string)($item['material'] ?? ''));

@@ -2654,9 +2654,9 @@ class PosOrdersController
             $items_count = count($orders);
 
             foreach ($orders as $idx => $order) {
-                $quantity = $order['quantity'] ?? 0;
-                $finalprice = $order['finalprice'] ?? 0;
-                $item_total = $quantity * $finalprice;
+                $quantity = max(1, (int)($order['quantity'] ?? 1));
+                $finalprice = (float)($order['finalprice'] ?? 0);
+                $item_total = $finalprice > 0 ? $finalprice : ((float)($order['itemprice'] ?? 0) * $quantity);
                 $gst = $order['gst'] ?? 0;
                 $payment_type = strtolower($order['payment_type'] ?? '') === 'cod' ? 'COD' : 'Prepaid';
                 $product_weight = (float)($order['product_weight'] ?? 0);
@@ -2833,11 +2833,11 @@ class PosOrdersController
 
             $items_html = '';
             foreach ($orders as $order) {
-                $quantity = $order['quantity'] ?? 0;
+                $quantity = max(1, (int)($order['quantity'] ?? 1));
                 $product_weight = (float)($order['product_weight'] ?? 0);
                 $gst = $order['gst'] ?? 0;
-                $finalprice = $order['finalprice'] ?? 0;
-                $item_total = $quantity * $finalprice;
+                $finalprice = (float)($order['finalprice'] ?? 0);
+                $item_total = $finalprice > 0 ? $finalprice : ((float)($order['itemprice'] ?? 0) * $quantity);
                 $payment_type = strtolower($order['payment_type'] ?? '') === 'cod' ? 'COD' : 'Prepaid';
                 $items_html .= '
                 <tr class="border-b border-gray-100" data-groupname="' . htmlspecialchars($order['groupname'] ?? '') . '" data-item-id="' . htmlspecialchars($order['id'] ?? '') . '">

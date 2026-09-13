@@ -546,9 +546,10 @@ if ($end - $start < $slotSize - 1) {
                 $orderDate = $fmtDate($order['order_date'] ?? null);
                 $shipByDate = $fmtDate($order['esd'] ?? null);
                 $paymentTypeLabel = strtoupper((string)($order['payment_type'] ?? 'N/A'));
-                $quantity = (int)($order['quantity'] ?? 0);
+                $quantity = max(1, (int)($order['quantity'] ?? 1));
                 $price = (float)($order['itemprice'] ?? 0);
-                $totalPrice = (float)($order['finalprice'] ?? 0);
+                $finalPrice = (float)($order['finalprice'] ?? 0);
+                $totalPrice = $finalPrice > 0 ? $finalPrice : ($price * $quantity);
                 $orderCurrency = strtoupper(trim((string)($order['currency'] ?? $primaryCurrency)));
                 $statusClass = $statusColors[$status] ?? 'bg-gray-100 text-gray-800';
                 $orderDetailUrl = base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . rawurlencode($orderNumber));
