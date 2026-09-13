@@ -378,6 +378,7 @@ class PosInvoiceController
         }
 
         $orderInfo = $this->fetchOrderInfoByOrderNumber($orderNumber);
+        $orderInfo = $this->enrichOrderInfoShippingDetails($orderInfo, $invoice);
 
         return [
             'invoice' => $invoice,
@@ -440,21 +441,276 @@ class PosInvoiceController
     /** @return array<string,mixed> */
     private function resolvePosInvoiceIrnEwbRuntimeData(array $invoice, string $orderNumber): array
     {
-        global $invoiceModel, $conn;
+        global $invoiceModel, $commanModel, $conn;
 
         $invoiceId = (int) ($invoice['id'] ?? 0);
         $items = $invoiceModel->getInvoiceItems($invoiceId);
         $orderInfo = $this->fetchOrderInfoByOrderNumber($orderNumber);
+        $orderInfo = $this->enrichOrderInfoShippingDetails($orderInfo, $invoice);
 
-        require_once __DIR__ . '/../models/comman/tables.php';
-        $comman = new Tables($conn);
-        $firm = $comman->getRecordById('firm_details', 1);
+        $firm = $commanModel !== null ? $commanModel->getRecordById('firm_details', 1) : [];
 
         return [
             'items' => is_array($items) ? $items : [],
             'order_info' => $orderInfo,
             'firm' => is_array($firm) ? $firm : [],
         ];
+    }
+
+    /** @return array<string, mixed> */
+    private function enrichOrderInfoShippingDetails(?array $orderInfo, array $invoice = []): array
+    {
+        global $conn, $commanModel;
+
+        $info = is_array($orderInfo) ? $orderInfo : [];
+
+        if (empty($info) && !empty($invoice['vp_order_info_id']) && $commanModel !== null) {
+            $row = $commanModel->getRecordById('vp_order_info', (int) $invoice['vp_order_info_id']);
+            if (is_array($row)) {
+                $info = $row;
+            }
+        }
+        if (empty($info) && !empty($invoice['customer_id']) && $commanModel !== null) {
+            $cust = $commanModel->getRecordById('vp_customers', (int) $invoice['customer_id']);
+            if (is_array($cust)) {
+                $info = $cust;
+            }
+        }
+
+        $pick = static function (...$candidates): string {
+            foreach ($candidates as $c) {
+                $val = trim((string) $c);
+                if ($val !== '') {
+                    return $val;
+                }
+            }
+            return '';
+        };
+
+        // 1. Billing Name
+        $firstName = $pick($info['first_name'] ?? '', $info['customer_first_name'] ?? '', $info['name'] ?? '', $info['customer_name'] ?? '');
+        $lastName = $pick($info['last_name'] ?? '', $info['customer_last_name'] ?? '');
+        if ($firstName === '' && !empty($info['sname'])) {
+            $parts = explode(' ', trim((string) $info['sname']), 2);
+            $firstName = $parts[0] ?? '';
+            $lastName = $parts[1] ?? '';
+        }
+        if ($firstName === '' && !empty($info['shipping_name'])) {
+            $parts = explode(' ', trim((string) $info['shipping_name']), 2);
+            $firstName = $parts[0] ?? '';
+            $lastName = $parts[1] ?? '';
+        }
+        $info['first_name'] = $firstName;
+        $info['last_name'] = $lastName;
+
+        // 2. Billing Address
+        $info['address_line1'] = $pick($info['address_line1'] ?? '', $info['address1'] ?? '', $info['address'] ?? '');
+        $info['address_line2'] = $pick($info['address_line2'] ?? '', $info['address2'] ?? '');
+        $info['city'] = $pick($info['city'] ?? '', $info['location'] ?? '');
+        $info['zipcode'] = $pick($info['zipcode'] ?? '', $info['zip'] ?? '', $info['pincode'] ?? '', $info['pin'] ?? '');
+        $info['country'] = strtoupper($pick($info['country'] ?? '', $info['country_code'] ?? '', 'IN'));
+
+        // 3. Shipping Name
+        $shipFirstName = $pick(
+            $info['shipping_first_name'] ?? '',
+            $info['sfirst_name'] ?? '',
+            $info['confirm_sfirst_name'] ?? ''
+        );
+        $shipLastName = $pick(
+            $info['shipping_last_name'] ?? '',
+            $info['slast_name'] ?? '',
+            $info['confirm_slast_name'] ?? ''
+        );
+        $shipFullName = $pick(
+            $info['shipping_name'] ?? '',
+            $info['sname'] ?? '',
+            $info['confirm_sname'] ?? ''
+        );
+
+        if ($shipFullName === '' && ($shipFirstName !== '' || $shipLastName !== '')) {
+            $shipFullName = trim($shipFirstName . ' ' . $shipLastName);
+        }
+        if ($shipFullName === '') {
+            $shipFullName = trim($firstName . ' ' . $lastName);
+            $shipFirstName = $firstName;
+            $shipLastName = $lastName;
+        } elseif ($shipFirstName === '') {
+            $parts = explode(' ', $shipFullName, 2);
+            $shipFirstName = $parts[0] ?? '';
+            $shipLastName = $parts[1] ?? '';
+        }
+
+        $info['shipping_first_name'] = $shipFirstName;
+        $info['shipping_last_name'] = $shipLastName;
+        $info['shipping_name'] = $shipFullName;
+        $info['sname'] = $shipFullName;
+
+        // 4. Shipping Address Line 1 & 2
+        $shipAddr1 = $pick(
+            $info['shipping_address_line1'] ?? '',
+            $info['saddress1'] ?? '',
+            $info['shipping_address1'] ?? '',
+            $info['confirm_saddress1'] ?? ''
+        );
+        $shipAddr2 = $pick(
+            $info['shipping_address_line2'] ?? '',
+            $info['saddress2'] ?? '',
+            $info['shipping_address2'] ?? '',
+            $info['confirm_saddress2'] ?? ''
+        );
+        if ($shipAddr1 === '' && !empty($info['shipping_address'])) {
+            $shipAddr1 = trim((string) $info['shipping_address']);
+        }
+        if ($shipAddr1 === '') {
+            $shipAddr1 = (string) $info['address_line1'];
+            $shipAddr2 = (string) $info['address_line2'];
+        }
+
+        $info['shipping_address_line1'] = $shipAddr1;
+        $info['shipping_address_line2'] = $shipAddr2;
+        $info['saddress1'] = $shipAddr1;
+        $info['saddress2'] = $shipAddr2;
+        $info['shipping_address'] = trim($shipAddr1 . ' ' . $shipAddr2);
+
+        // 5. Shipping City
+        $shipCity = $pick(
+            $info['shipping_city'] ?? '',
+            $info['scity'] ?? '',
+            $info['shipping_location'] ?? '',
+            $info['confirm_scity'] ?? ''
+        );
+        if ($shipCity === '') {
+            $shipCity = (string) $info['city'];
+        }
+        $info['shipping_city'] = $shipCity;
+        $info['scity'] = $shipCity;
+
+        // 6. Shipping Pincode
+        $isExport = ($info['country'] !== 'IN' && $info['country'] !== 'INDIA');
+        $shipZip = $pick(
+            $info['shipping_zipcode'] ?? '',
+            $info['szip'] ?? '',
+            $info['szipcode'] ?? '',
+            $info['shipping_pincode'] ?? '',
+            $info['confirm_szip'] ?? ''
+        );
+        if ($shipZip === '') {
+            $shipZip = (string) $info['zipcode'];
+        }
+        if ($shipZip === '') {
+            $shipZip = $isExport ? '999999' : '110001';
+        }
+        $info['shipping_zipcode'] = $shipZip;
+        $info['szip'] = $shipZip;
+
+        // 7. Resolve State Code (Numeric GST 01-38 or 96)
+        $resolveStateNum = static function ($rawCode, $rawName, $country, $conn) {
+            $country = strtoupper(trim((string) $country));
+            if ($country !== 'IN' && $country !== 'INDIA' && $country !== '') {
+                return '96';
+            }
+            $rawCodeStr = trim((string) $rawCode);
+            $rawNameStr = trim((string) $rawName);
+
+            if (preg_match('/^\d{1,2}$/', $rawCodeStr)) {
+                $num = (int) $rawCodeStr;
+                if ($num >= 1 && $num <= 38) {
+                    return sprintf('%02d', $num);
+                }
+            }
+
+            if ($conn instanceof mysqli && ($rawNameStr !== '' || $rawCodeStr !== '')) {
+                require_once __DIR__ . '/../models/country/state.php';
+                $stateModel = new State($conn);
+                $res = $stateModel->resolveGstStateCode($rawNameStr, $rawCodeStr, 105);
+                if ($res !== null && $res !== '') {
+                    return sprintf('%02d', (int) $res);
+                }
+            }
+
+            $stateMap = [
+                'JAMMU AND KASHMIR' => '01', 'JAMMU & KASHMIR' => '01', 'JK' => '01',
+                'HIMACHAL PRADESH' => '02', 'HP' => '02',
+                'PUNJAB' => '03', 'PB' => '03',
+                'CHANDIGARH' => '04', 'CH' => '04',
+                'UTTARAKHAND' => '05', 'UTTARANCHAL' => '05', 'UK' => '05', 'UA' => '05',
+                'HARYANA' => '06', 'HR' => '06',
+                'DELHI' => '07', 'NEW DELHI' => '07', 'DL' => '07',
+                'RAJASTHAN' => '08', 'RJ' => '08',
+                'UTTAR PRADESH' => '09', 'UP' => '09',
+                'BIHAR' => '10', 'BR' => '10',
+                'SIKKIM' => '11', 'SK' => '11',
+                'ARUNACHAL PRADESH' => '12', 'AR' => '12',
+                'NAGALAND' => '13', 'NL' => '13',
+                'MANIPUR' => '14', 'MN' => '14',
+                'MIZORAM' => '15', 'MZ' => '15',
+                'TRIPURA' => '16', 'TR' => '16',
+                'MEGHALAYA' => '17', 'ML' => '17',
+                'ASSAM' => '18', 'AS' => '18',
+                'WEST BENGAL' => '19', 'WB' => '19',
+                'JHARKHAND' => '20', 'JH' => '20',
+                'ODISHA' => '21', 'ORISSA' => '21', 'OR' => '21', 'OD' => '21',
+                'CHHATTISGARH' => '22', 'CG' => '22', 'CT' => '22',
+                'MADHYA PRADESH' => '23', 'MP' => '23',
+                'GUJARAT' => '24', 'GJ' => '24',
+                'DADRA AND NAGAR HAVELI AND DAMAN AND DIU' => '26', 'DD' => '26', 'DN' => '26',
+                'MAHARASHTRA' => '27', 'MH' => '27',
+                'ANDHRA PRADESH' => '37', 'AP' => '37',
+                'KARNATAKA' => '29', 'KA' => '29',
+                'GOA' => '30', 'GA' => '30',
+                'LAKSHADWEEP' => '31', 'LD' => '31',
+                'KERALA' => '32', 'KL' => '32',
+                'TAMIL NADU' => '33', 'TN' => '33',
+                'PUDUCHERRY' => '34', 'PONDICHERRY' => '34', 'PY' => '34',
+                'ANDAMAN AND NICOBAR ISLANDS' => '35', 'AN' => '35',
+                'TELANGANA' => '36', 'TS' => '36', 'TG' => '36',
+                'LADAKH' => '38', 'LA' => '38'
+            ];
+
+            $keyName = strtoupper($rawNameStr);
+            if (isset($stateMap[$keyName])) {
+                return $stateMap[$keyName];
+            }
+            $keyCode = strtoupper($rawCodeStr);
+            if (isset($stateMap[$keyCode])) {
+                return $stateMap[$keyCode];
+            }
+
+            return $country !== 'IN' && $country !== 'INDIA' ? '96' : '07';
+        };
+
+        $billingStateCode = $resolveStateNum(
+            $info['state_code'] ?? '',
+            $info['state'] ?? '',
+            $info['country'],
+            $conn
+        );
+        $info['state_code'] = $billingStateCode;
+
+        $shipStateRaw = $pick(
+            $info['shipping_state_code'] ?? '',
+            $info['sstate_code'] ?? '',
+            $info['confirm_sstate_code'] ?? ''
+        );
+        $shipStateName = $pick(
+            $info['shipping_state'] ?? '',
+            $info['sstate'] ?? ''
+        );
+
+        if ($shipStateRaw === '' && $shipStateName === '') {
+            $shipStateCode = $billingStateCode;
+        } else {
+            $shipStateCode = $resolveStateNum(
+                $shipStateRaw,
+                $shipStateName,
+                $info['country'],
+                $conn
+            );
+        }
+        $info['shipping_state_code'] = $shipStateCode;
+        $info['sstate_code'] = $shipStateCode;
+
+        return $info;
     }
 
     private function isPosRegisterInvocation(): bool
