@@ -3540,13 +3540,13 @@ class PosInvoiceController
 
         $amountSummary = $this->buildPosInvoiceAmountSummaryRows(
             $posDiscountMeta,
-            $totalAmount,
+            round((float)$totalAmount, 2),
             $summaryTaxAmount,
             $tableColCount
         );
         if ($amountSummary !== '') {
             $summaryrows .= $amountSummary;
-            //$totalAmount = $summaryGrandTotal;
+            $totalAmount = $summaryGrandTotal;
         } else {
             if ($discount > 0) {
                 $summaryrows .= '
