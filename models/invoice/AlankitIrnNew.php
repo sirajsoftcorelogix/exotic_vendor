@@ -295,12 +295,11 @@ return base64_encode($encryptedData);
         CURLOPT_CUSTOMREQUEST => 'POST',
         CURLOPT_POSTFIELDS => json_encode($data),
         CURLOPT_HTTPHEADER => array(
-            'Ocp-Apim-Subscription-Key: AL6x9c9S1b7g8h9S7C',
-            'Gstin: 07AADCE1400C1ZJ',
-            'user_name: API_Yash@exoticindi',
+            'Ocp-Apim-Subscription-Key: ' . $this->subscriptionKey,
+            'Gstin: ' . $this->gstin,
+            'user_name: ' . $this->username,
             'AuthToken: '.$accessToken,
             'Content-Type: application/json'
-            //'Cookie: sess_map=fqcuxerztqqzbryduezaywetarayrduvcaebxuzfaubacufxccubxurxbdttrwqvrxbzcfrszstsquwezbeswaueqvbtzzxsueufyzdsqyacfefubucaqeqaeduuvyuaydbvbrsryxqubruvydafdrsxveqecbdcdyaxvawuuwaayadq'
         ),
         ));
 
@@ -650,7 +649,7 @@ return base64_encode($encryptedData);
             'Content-Type: application/json',
             'Accept: application/json',
             'Gstin: ' . $this->gstin,
-            'user_name: API_Yash@exoticindi',
+            'user_name: ' . $this->username,
             'Ocp-Apim-Subscription-Key: ' . $this->subscriptionKey,
             'AuthToken: ' . $accessToken
         ];
@@ -690,11 +689,13 @@ return base64_encode($encryptedData);
         //ErrorDetails
         if (isset($decoded['ErrorDetails'])) {
             error_log("Alankit EWB API Error: " . json_encode($decoded['ErrorDetails']));
+            $formattedErr = $this->formatErrorDetails($decoded['ErrorDetails']);
             return [
                 'status' => false,
-                'message' => 'API Error',
+                'message' => $formattedErr !== '' ? $formattedErr : 'API Error',
                 'ErrorMessage' => $decoded['ErrorDetails'],
-                'Data' => $decoded['Data']
+                'ErrorDetails' => $decoded['ErrorDetails'],
+                'Data' => $decoded['Data'] ?? null
             ];
         }
         // Decrypt response
@@ -707,6 +708,34 @@ return base64_encode($encryptedData);
         
         error_log("Alankit EWB: No response data received");
         return $decoded;
+    }
+
+    /**
+     * Format Alankit ErrorDetails into a human-readable string.
+     */
+    public function formatErrorDetails($details): string {
+        if ($details === null || $details === '') {
+            return '';
+        }
+        if (is_array($details) || is_object($details)) {
+            $msgs = [];
+            foreach ((array)$details as $item) {
+                if (is_array($item) || is_object($item)) {
+                    $itemArr = (array)$item;
+                    $code = $itemArr['ErrorCode'] ?? $itemArr['errorCode'] ?? $itemArr['error_code'] ?? '';
+                    $msg = $itemArr['ErrorMessage'] ?? $itemArr['errorMessage'] ?? $itemArr['error_message'] ?? json_encode($itemArr);
+                    $msgs[] = ($code !== '' ? "[$code] " : '') . $msg;
+                } elseif (is_string($item) || is_numeric($item)) {
+                    $msgs[] = (string)$item;
+                }
+            }
+            if (!empty($msgs)) {
+                return implode('; ', $msgs);
+            }
+            $encoded = json_encode($details, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            return is_string($encoded) ? trim($encoded) : '';
+        }
+        return trim((string)$details);
     }
 }
 ?>
