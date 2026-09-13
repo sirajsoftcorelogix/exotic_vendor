@@ -48,7 +48,12 @@ class Order
             'customer_id',
         ];
         foreach ($intFields as $field) {
-            $data[$field] = is_numeric($data[$field] ?? null) ? (int) $data[$field] : 0;
+            if ($field === 'quantity') {
+                $rawQty = $data['quantity'] ?? null;
+                $data['quantity'] = (is_numeric($rawQty) && (int)$rawQty > 0) ? (int)$rawQty : 1;
+            } else {
+                $data[$field] = is_numeric($data[$field] ?? null) ? (int) $data[$field] : 0;
+            }
         }
 
         return $this->sanitizeOrderImportFields($data);

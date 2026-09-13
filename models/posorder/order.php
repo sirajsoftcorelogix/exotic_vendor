@@ -542,6 +542,10 @@ class POSOrder
             return ['success' => false, 'error' => 'Prepare failed: ' . $this->db->error];
         }
 
+        if (isset($data['quantity'])) {
+            $data['quantity'] = max(1, (int)($data['quantity'] ?? 1));
+        }
+
         $types = '';
         $values = [];
         foreach ($InsertFields as $field) {

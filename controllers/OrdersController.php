@@ -530,7 +530,7 @@ class OrdersController
             $cart = (array)($ord['cart'] ?? []);
             $totalAmt = 0.0;
             foreach ($cart as $item) {
-                $qty = (float)($item['qty'] ?? 1);
+                $qty = (float)($item['quantity'] ?? $item['qty'] ?? 1);
                 $price = (float)($item['finalprice'] ?? $item['itemprice'] ?? 0);
                 $totalAmt += ($qty * $price);
             }
@@ -945,7 +945,7 @@ class OrdersController
                     'finalprice' => $item['finalprice'] ?? '',
                     'image' => $item['image'] ?? '',
                     'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
-                    'quantity' => $item['qty'] ?? '',
+                    'quantity' => $item['quantity'] ?? $item['qty'] ?? 1,
                     'options' => $item['options'] ?? 0,
                     'addons' => Order::normalizeVendorOrderLineAddons($item['addons'] ?? null),
                     'gst' => $item['gst'] ?? '',
@@ -1620,7 +1620,7 @@ class OrdersController
                     'finalprice' => $item['finalprice'] ?? '',
                     'image' => $item['image'] ?? '',
                     'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
-                    'quantity' => $item['qty'] ?? '',
+                    'quantity' => $item['quantity'] ?? $item['qty'] ?? 1,
                     'options' => $item['options'] ?? 0,
                     'addons' => Order::normalizeVendorOrderLineAddons($item['addons'] ?? null),
                     'gst' => $item['gst'] ?? '',
@@ -3421,7 +3421,7 @@ class OrdersController
             'finalprice' => $item['finalprice'] ?? '',
             'image' => $item['image'] ?? '',
             'marketplace_vendor' => $item['marketplace_vendor'] ?? '',
-            'quantity' => $item['qty'] ?? '',
+            'quantity' => $item['quantity'] ?? $item['qty'] ?? 1,
             'options' => $item['options'] ?? 0,
             'addons' => Order::normalizeVendorOrderLineAddons($item['addons'] ?? null),
             'gst' => $item['gst'] ?? '',
@@ -3536,7 +3536,7 @@ class OrdersController
                 'item_code' => $itemCode,
                 'sku' => $sku,
                 'title' => trim((string)($item['title'] ?? '')),
-                'quantity' => (int)($item['qty'] ?? 0),
+                'quantity' => (int)($item['quantity'] ?? $item['qty'] ?? 1),
                 'in_db' => $dbRow !== null,
                 'db_status' => $dbStatus !== '' ? $dbStatus : null,
                 'db_status_label' => $dbStatus !== '' ? ($statusLabels[$dbStatus] ?? $dbStatus) : '— (new line)',
