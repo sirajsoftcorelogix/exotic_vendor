@@ -109,14 +109,5 @@ function order_workflow_allowed_targets(mysqli $conn, string $fromSlug): array
         ];
     }
 
-    if (isAdministratorUser()) {
-        return [
-            'enforced' => false,
-            'filter_options' => false,
-            'allowed_slugs' => [],
-            'stock_affecting_slugs' => [],
-        ];
-    }
-
     return order_workflow_transition_model($conn)->getAllowedTargetsForFromSlug($fromSlug);
 }
