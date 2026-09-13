@@ -5,6 +5,7 @@ require_once 'models/user/user.php';
 require_once 'models/comman/tables.php';
 require_once 'models/customer/Customer.php';
 require_once 'models/product/product.php';
+require_once __DIR__ . '/../models/courier/CourierPartner.php';
 require_once __DIR__ . '/../models/payment/Payment.php';
 require_once __DIR__ . '/../helpers/invoice/pos_order_pricing.php';
 // Register in $GLOBALS so methods work when this file is required from a function scope (e.g. payments → create invoice).
