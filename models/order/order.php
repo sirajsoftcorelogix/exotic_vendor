@@ -3395,6 +3395,74 @@ class Order
         return $rows;
     }
 
+    /** @var array<string, array{admin_id: int, parent_id: int, parent_admin_id: int}>|null */
+    private ?array $orderStatusMetaCache = null;
+
+    /**
+     * Check if a local status slug is an internal sub-status (admin_id = 0) belonging to an online status (e.g. admin_id = 1 / pending).
+     * This prevents online 'pending' status sync from overriding local workflow sub-statuses (picklist, qc_failed, packing, ready_to_ship, etc.).
+     *
+     * @param string $localSlug Local status slug in vp_orders.status
+     * @param int|string $onlineRawStatus Raw order_status code from Exotic India Vendor API (e.g. 1)
+     */
+    public function isLocalSubStatusOfOnlineStatus(string $localSlug, $onlineRawStatus): bool
+    {
+        $localSlug = strtolower(trim($localSlug));
+        if ($localSlug === '') {
+            return false;
+        }
+
+        if ($this->orderStatusMetaCache === null) {
+            $cache = [];
+            $res = $this->db->query(
+                "SELECT s.slug, s.admin_id, s.parent_id, p.admin_id AS parent_admin_id
+                 FROM vp_order_status s
+                 LEFT JOIN vp_order_status p ON p.id = s.parent_id"
+            );
+            if ($res) {
+                while ($row = $res->fetch_assoc()) {
+                    $slugKey = strtolower(trim((string)($row['slug'] ?? '')));
+                    if ($slugKey !== '') {
+                        $cache[$slugKey] = [
+                            'admin_id' => (int)($row['admin_id'] ?? 0),
+                            'parent_id' => (int)($row['parent_id'] ?? 0),
+                            'parent_admin_id' => (int)($row['parent_admin_id'] ?? 0),
+                        ];
+                    }
+                }
+                $res->free();
+            }
+            $this->orderStatusMetaCache = $cache;
+        }
+
+        $meta = $this->orderStatusMetaCache[$localSlug] ?? null;
+        if (!$meta) {
+            return false;
+        }
+
+        $localAdminId = $meta['admin_id'];
+        // Primary synced status (admin_id != 0) is not an internal sub-status
+        if ($localAdminId !== 0) {
+            return false;
+        }
+
+        $onlineAdminId = is_numeric($onlineRawStatus) ? (int)$onlineRawStatus : 0;
+        $parentAdminId = $meta['parent_admin_id'];
+        if ($parentAdminId === 0) {
+            $parentAdminId = 1; // Default Pending group
+        }
+
+        if ($onlineAdminId > 0 && $onlineAdminId === $parentAdminId) {
+            return true;
+        }
+
+        if ($onlineAdminId === 1) {
+            return true;
+        }
+
+        return false;
+    }
+
     /**
      * Sync order statuses from Exotic India Vendor API in batches.
      *
@@ -3556,8 +3624,15 @@ class Order
                 foreach ($localLines as $localLine) {
                     $lineId = (int)$localLine['id'];
                     $currentStatus = strtolower(trim((string)($localLine['status'] ?? '')));
+                    $targetStatus = strtolower(trim($newStatusSlug));
 
-                    if ($currentStatus === strtolower(trim($newStatusSlug))) {
+                    if ($currentStatus === $targetStatus) {
+                        $unchangedLines++;
+                        continue;
+                    }
+
+                    // Protect local workflow statuses (admin_id = 0) from being overridden back to online pending (admin_id = 1)
+                    if ($this->isLocalSubStatusOfOnlineStatus($currentStatus, $rawStatus)) {
                         $unchangedLines++;
                         continue;
                     }
@@ -3627,6 +3702,213 @@ class Order
             'skipped_lines' => $skippedLines,
             'details' => $details,
             'errors' => $errors
+        ];
+    }
+
+    /**
+     * Ensure vp_order_status_log table exists.
+     */
+    public function ensureOrderStatusLogTableExists(): void
+    {
+        $sql = "CREATE TABLE IF NOT EXISTS `vp_order_status_log` (
+          `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+          `order_id` INT UNSIGNED NOT NULL,
+          `status` VARCHAR(100) NOT NULL,
+          `changed_by` INT UNSIGNED DEFAULT 0,
+          `api_response` TEXT DEFAULT NULL,
+          `change_date` DATETIME DEFAULT CURRENT_TIMESTAMP,
+          `created_on` DATETIME DEFAULT CURRENT_TIMESTAMP,
+          INDEX `idx_order_id` (`order_id`),
+          INDEX `idx_status` (`status`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+        $this->db->query($sql);
+    }
+
+    /**
+     * Recover local statuses of order lines that were overridden back to 'pending' by status sync.
+     *
+     * @param bool $dryRun If true, simulate recovery without writing DB updates.
+     * @param int $userId Performing user ID for audit log.
+     * @return array{
+     *   dry_run: bool,
+     *   checked_candidates: int,
+     *   restored_lines: int,
+     *   details: list<array<string, mixed>>,
+     *   errors: list<string>
+     * }
+     */
+    public function recoverOverriddenOrderStatuses(bool $dryRun = false, int $userId = 0): array
+    {
+        $this->ensureOrderStatusLogTableExists();
+
+        $candidatesMap = []; // line_id => ['restored_status' => string, 'reason' => string, 'order_number' => string, 'item_code' => string, 'sku' => string]
+        $errors = [];
+
+        // Strategy 1: Recover from vp_order_status_log entries generated by vendor_api_status_sync
+        $sqlLogs = "SELECT osl.id AS log_id, osl.order_id, osl.api_response, osl.change_date, o.order_number, o.item_code, o.sku, o.status AS current_status
+                    FROM vp_order_status_log osl
+                    JOIN vp_orders o ON o.id = osl.order_id
+                    WHERE o.status = 'pending'
+                      AND (osl.api_response LIKE '%vendor_api_status_sync%' OR osl.api_response LIKE '%sync_order_statuses%' OR osl.api_response LIKE '%old_status%')
+                    ORDER BY osl.id ASC";
+
+        $resLogs = $this->db->query($sqlLogs);
+        if ($resLogs) {
+            while ($row = $resLogs->fetch_assoc()) {
+                $lineId = (int)$row['order_id'];
+                $apiResp = json_decode((string)($row['api_response'] ?? ''), true);
+                if (!is_array($apiResp) || empty($apiResp['old_status'])) {
+                    continue;
+                }
+
+                $oldStatus = strtolower(trim((string)$apiResp['old_status']));
+                $newStatus = strtolower(trim((string)($apiResp['new_status'] ?? $row['status'] ?? '')));
+
+                if ($oldStatus !== '' && $oldStatus !== 'pending' && ($newStatus === 'pending' || $newStatus === '')) {
+                    if (!isset($candidatesMap[$lineId])) {
+                        $candidatesMap[$lineId] = [
+                            'line_id' => $lineId,
+                            'order_number' => (string)($row['order_number'] ?? ''),
+                            'item_code' => (string)($row['item_code'] ?? ''),
+                            'sku' => (string)($row['sku'] ?? ''),
+                            'current_status' => 'pending',
+                            'restored_status' => $oldStatus,
+                            'reason' => 'Vendor API status sync override recovery (from vp_order_status_log ID #' . $row['log_id'] . ')',
+                        ];
+                    }
+                }
+            }
+        }
+
+        // Strategy 2: Check vp_picklist_items if table exists
+        $hasPicklistTable = false;
+        $checkPicklist = $this->db->query("SHOW TABLES LIKE 'vp_picklist_items'");
+        if ($checkPicklist && $checkPicklist->num_rows > 0) {
+            $hasPicklistTable = true;
+        }
+
+        if ($hasPicklistTable) {
+            $sqlPicklist = "SELECT pi.id AS picklist_item_id, pi.order_id, pi.previous_order_status, pi.status AS picklist_status,
+                                   o.order_number, o.item_code, o.sku, o.status AS current_status
+                            FROM vp_picklist_items pi
+                            JOIN vp_orders o ON o.id = pi.order_id
+                            WHERE o.status = 'pending'
+                              AND pi.previous_order_status IS NOT NULL
+                              AND pi.previous_order_status != ''
+                              AND pi.previous_order_status != 'pending'";
+            $resPicklist = $this->db->query($sqlPicklist);
+            if ($resPicklist) {
+                while ($pRow = $resPicklist->fetch_assoc()) {
+                    $lineId = (int)$pRow['order_id'];
+                    $prevStatus = strtolower(trim((string)$pRow['previous_order_status']));
+                    if ($prevStatus !== '' && $prevStatus !== 'pending' && !isset($candidatesMap[$lineId])) {
+                        $candidatesMap[$lineId] = [
+                            'line_id' => $lineId,
+                            'order_number' => (string)($pRow['order_number'] ?? ''),
+                            'item_code' => (string)($pRow['item_code'] ?? ''),
+                            'sku' => (string)($pRow['sku'] ?? ''),
+                            'current_status' => 'pending',
+                            'restored_status' => $prevStatus,
+                            'reason' => 'Picklist item pre-picklist status recovery (from vp_picklist_items ID #' . $pRow['picklist_item_id'] . ')',
+                        ];
+                    }
+                }
+            }
+        }
+
+        // Strategy 3: Check PO linkage via vp_po_items / purchase_orders
+        $hasPoItems = false;
+        $checkPo = $this->db->query("SHOW TABLES LIKE 'vp_po_items'");
+        if ($checkPo && $checkPo->num_rows > 0) {
+            $hasPoItems = true;
+        }
+
+        if ($hasPoItems) {
+            $sqlPo = "SELECT pi.id AS po_item_id, p.status AS po_status, o.id AS line_id, o.order_number, o.item_code, o.sku, o.status AS current_status
+                      FROM vp_po_items pi
+                      JOIN purchase_orders p ON p.id = pi.purchase_orders_id
+                      JOIN vp_orders o ON o.order_number = CAST(pi.order_number AS CHAR)
+                      WHERE o.status = 'pending'
+                        AND p.status IS NOT NULL
+                        AND p.status != ''";
+            $resPo = $this->db->query($sqlPo);
+            if ($resPo) {
+                while ($poRow = $resPo->fetch_assoc()) {
+                    $lineId = (int)$poRow['line_id'];
+                    $poStatus = strtolower(trim((string)$poRow['po_status']));
+                    if ($poStatus !== '' && !isset($candidatesMap[$lineId])) {
+                        $candidatesMap[$lineId] = [
+                            'line_id' => $lineId,
+                            'order_number' => (string)($poRow['order_number'] ?? ''),
+                            'item_code' => (string)($poRow['item_code'] ?? ''),
+                            'sku' => (string)($poRow['sku'] ?? ''),
+                            'current_status' => 'pending',
+                            'restored_status' => $poStatus,
+                            'reason' => 'Purchase order status recovery (from purchase_orders ID #' . $poRow['po_item_id'] . ' status: ' . $poStatus . ')',
+                        ];
+                    }
+                }
+            }
+        }
+
+        $restoredLines = 0;
+        $details = [];
+
+        foreach ($candidatesMap as $lineId => $cand) {
+            $restoredStatus = $cand['restored_status'];
+            $now = date('Y-m-d H:i:s');
+
+            $lineDetail = [
+                'line_id' => $lineId,
+                'order_number' => $cand['order_number'],
+                'item_code' => $cand['item_code'],
+                'sku' => $cand['sku'],
+                'old_status' => 'pending',
+                'new_status' => $restoredStatus,
+                'reason' => $cand['reason'],
+                'restored' => !$dryRun,
+            ];
+
+            if (!$dryRun) {
+                $updStmt = $this->db->prepare("UPDATE vp_orders SET status = ?, updated_at = ?, update_flag = 1 WHERE id = ? AND status = 'pending'");
+                if ($updStmt) {
+                    $updStmt->bind_param('ssi', $restoredStatus, $now, $lineId);
+                    $updStmt->execute();
+                    $updStmt->close();
+                }
+
+                $auditPayload = json_encode([
+                    'source' => 'status_sync_recovery',
+                    'orderid' => $cand['order_number'],
+                    'itemcode' => $cand['item_code'],
+                    'old_status' => 'pending',
+                    'new_status' => $restoredStatus,
+                    'reason' => $cand['reason'],
+                ], JSON_UNESCAPED_SLASHES);
+
+                $auditStmt = $this->db->prepare(
+                    "INSERT INTO vp_order_status_log (order_id, status, changed_by, api_response, change_date, created_on) VALUES (?, ?, ?, ?, NOW(), NOW())"
+                );
+                if ($auditStmt) {
+                    $auditStmt->bind_param('isis', $lineId, $restoredStatus, $userId, $auditPayload);
+                    $auditStmt->execute();
+                    $auditStmt->close();
+                }
+
+                $restoredLines++;
+            } else {
+                $restoredLines++;
+            }
+
+            $details[] = $lineDetail;
+        }
+
+        return [
+            'dry_run' => $dryRun,
+            'checked_candidates' => count($candidatesMap),
+            'restored_lines' => $restoredLines,
+            'details' => $details,
+            'errors' => $errors,
         ];
     }
 }

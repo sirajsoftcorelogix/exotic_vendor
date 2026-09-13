@@ -781,6 +781,16 @@ class OrdersController
             exit;
         }
 
+        if ($op === 'recover_overrides') {
+            $dryRun = !empty($input['dry_run']);
+            echo json_encode([
+                'success' => true,
+                'dry_run' => $dryRun,
+                'summary' => $ordersModel->recoverOverriddenOrderStatuses($dryRun, $userId),
+            ]);
+            exit;
+        }
+
         $dryRun = !empty($input['dry_run']);
         $limit = isset($input['limit']) ? max(1, min(100000, (int)$input['limit'])) : 500;
         $batchSize = isset($input['batch_size']) ? max(1, min(200, (int)$input['batch_size'])) : 50;
@@ -3527,7 +3537,9 @@ class OrdersController
             $apiStatus = $this->resolveVendorImportStatus($vendorOrder, $item, $statusList);
             $dbRow = $dbByKey[$key] ?? null;
             $dbStatus = $dbRow ? trim((string)($dbRow['status'] ?? '')) : '';
-            $statusDiffers = $dbRow !== null && $dbStatus !== '' && strcasecmp($dbStatus, $apiStatus) !== 0;
+            $rawApiOrderStatus = $item['order_status'] ?? 1;
+            $isLocalSub = ($dbStatus !== '' && $ordersModel->isLocalSubStatusOfOnlineStatus($dbStatus, $rawApiOrderStatus));
+            $statusDiffers = $dbRow !== null && $dbStatus !== '' && !$isLocalSub && strcasecmp($dbStatus, $apiStatus) !== 0;
             if ($statusDiffers) {
                 $hasStatusDiff = true;
             }
