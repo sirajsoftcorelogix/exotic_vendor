@@ -107,7 +107,7 @@ class Tables {
         return false;
     }
     public function get_order_status() {
-        $sql = "SELECT * FROM vp_order_status WHERE is_active = 1";
+        $sql = "SELECT * FROM vp_order_status WHERE is_active = 1 ORDER BY parent_id ASC, id ASC";
         $stmt = $this->ci->prepare($sql);        
         $stmt->execute();
         $result = $stmt->get_result();
@@ -121,7 +121,7 @@ class Tables {
     }
 
     public function get_order_status_list() {
-        $sql = "SELECT * FROM vp_order_status WHERE is_active = 1 and parent_id != 0";
+        $sql = "SELECT * FROM vp_order_status WHERE is_active = 1 AND parent_id != 0 ORDER BY parent_id ASC, id ASC";
         $stmt = $this->ci->prepare($sql);        
         $stmt->execute();
         $result = $stmt->get_result();
