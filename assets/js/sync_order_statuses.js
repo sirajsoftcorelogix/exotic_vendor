@@ -136,7 +136,14 @@
                 body: JSON.stringify(payload),
                 signal: state.abortController.signal
             });
-            var data = await response.json();
+            var rawText = await response.text();
+            var data;
+            try {
+                data = JSON.parse(rawText);
+            } catch (err) {
+                var cleanText = rawText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                throw new Error(cleanText || ('Server returned non-JSON response (' + response.status + ')'));
+            }
             if (!response.ok || data.success === false) {
                 throw new Error(data.message || ('Request failed (' + response.status + ')'));
             }
