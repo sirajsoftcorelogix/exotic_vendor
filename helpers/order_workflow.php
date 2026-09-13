@@ -100,5 +100,14 @@ function assert_bulk_order_status_transitions_allowed(
  */
 function order_workflow_allowed_targets(mysqli $conn, string $fromSlug): array
 {
+    if (is_order_workflow_terminal_status($fromSlug)) {
+        return [
+            'enforced' => true,
+            'filter_options' => true,
+            'allowed_slugs' => [$fromSlug],
+            'stock_affecting_slugs' => [],
+        ];
+    }
+
     return order_workflow_transition_model($conn)->getAllowedTargetsForFromSlug($fromSlug);
 }
