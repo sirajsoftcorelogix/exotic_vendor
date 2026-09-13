@@ -1325,50 +1325,9 @@
                 <label class="block text-sm font-bold mb-2">Order Status</label>
                 <select id="bulkOrderStatus" name="orderStatus" class="border rounded px-3 py-2 w-full">
                     <option value="">-- Select Status --</option>
-                    <?php
-                    // reuse status options logic
-                    $procurement_id = null;
-                    $sorder_id = null;
-                    foreach ($order_status_list as $s) {
-                        if ((isset($s['slug']) && strtolower($s['slug']) === 'procurement') ||
-                            (isset($s['title']) && strtolower($s['title']) === 'procurement')
-                        ) {
-                            $procurement_id = $s['id'] ?? null;
-                        }
-                        if ($s['parent_id'] === 0 && strtolower($s['slug']) === 'order') {
-                            $sorder_id = $s['id'] ?? null;
-                        }
-                    }
-                    $procurement_children = [];
-                    $other_statuses = [];
-                    foreach ($order_status_list as $status) {
-                        if ($procurement_id !== null && isset($status['id']) && $status['id'] == $procurement_id) continue;
-                        if ($sorder_id !== null &&  $status['id'] == $sorder_id) continue;
-                        if ($procurement_id !== null && isset($status['parent_id']) && $status['parent_id'] == $procurement_id) {
-                            $procurement_children[] = $status;
-                        } else {
-                            $other_statuses[] = $status;
-                        }
-                    }
-                    if (!empty($other_statuses)) {
-                        echo '<optgroup label="Order">';
-                        foreach ($other_statuses as $st) {
-                            $value = htmlspecialchars($st['slug'] ?? '');
-                            $label = htmlspecialchars($st['title'] ?? $st['slug'] ?? '');
-                            echo "<option value=\"{$value}\">{$label}</option>";
-                        }
-                        echo '</optgroup>';
-                    }
-                    if (!empty($procurement_children)) {
-                        echo '<optgroup label="Procurement">';
-                        foreach ($procurement_children as $st) {
-                            $value = htmlspecialchars($st['slug'] ?? '');
-                            $label = htmlspecialchars($st['title'] ?? $st['slug'] ?? '');
-                            echo "<option value=\"{$value}\">{$label}</option>";
-                        }
-                        echo '</optgroup>';
-                    }
-                    ?>
+                    <?php renderPartial('views/shared/partials/order_status_select_options.php', [
+                        'order_status_list' => $order_status_list ?? [],
+                    ]); ?>
                 </select>
             </div>
             <div class="mb-4">
