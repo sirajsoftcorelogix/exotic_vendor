@@ -1364,16 +1364,22 @@ class InvoicesController
                     'ewb_message' => 'E-Way bill generated successfully.',
                 ];
             }
-            $updateData['irn'] = $internationalData['irn'] ?? null; 
-            $updateData['ewb_error_message'] = json_encode($ewbResponse['ErrorDetails'] ?? $ewbResponse['message'] ?? 'Unknown error');
+            $updateData['irn'] = $internationalData['irn'] ?? null;
+            $errDetailStr = $alankitClient->formatErrorDetails($ewbResponse['ErrorDetails'] ?? $ewbResponse['ErrorMessage'] ?? null);
+            if ($errDetailStr === '') {
+                $errDetailStr = is_string($ewbResponse['message'] ?? null) && $ewbResponse['message'] !== 'API Error'
+                    ? $ewbResponse['message']
+                    : 'Failed to generate E-Way bill.';
+            }
+            $updateData['ewb_error_message'] = $errDetailStr;
             $invoiceModel->updateInvoiceInternational($invoiceId, $updateData);
 
             return [
                 'updateInvoiceInternational' => $updateData,
                 'ewb_response' => $ewbResponse,
                 'status' => false,
-                'message' => $ewbResponse['message'] ?? 'Failed to generate E-Way bill.',
-                'error_details' => $ewbResponse['ErrorDetails'] ?? ($ewbResponse['message'] ?? 'Unknown error'),
+                'message' => $errDetailStr,
+                'error_details' => $errDetailStr,
             ];
         } catch (Exception $e) {
             error_log("Alankit EWB Exception for invoice #$invoiceId: " . $e->getMessage());

@@ -826,11 +826,25 @@ class DomesticEwbIrnService {
     /** Convert Alankit's scalar or structured ErrorDetails value to readable text. */
     private function resolveIrnErrorDetails(array $response): string
     {
-        $details = $response['ErrorDetails'] ?? null;
+        $details = $response['ErrorDetails'] ?? $response['ErrorMessage'] ?? null;
         if ($details === null || $details === '') {
             $details = $response['message'] ?? $response['Message'] ?? $response['error'] ?? '';
         }
         if (is_array($details) || is_object($details)) {
+            $msgs = [];
+            foreach ((array)$details as $item) {
+                if (is_array($item) || is_object($item)) {
+                    $itemArr = (array)$item;
+                    $code = $itemArr['ErrorCode'] ?? $itemArr['errorCode'] ?? $itemArr['error_code'] ?? '';
+                    $msg = $itemArr['ErrorMessage'] ?? $itemArr['errorMessage'] ?? $itemArr['error_message'] ?? json_encode($itemArr);
+                    $msgs[] = ($code !== '' ? "[$code] " : '') . $msg;
+                } elseif (is_string($item) || is_numeric($item)) {
+                    $msgs[] = (string)$item;
+                }
+            }
+            if (!empty($msgs)) {
+                return implode('; ', $msgs);
+            }
             $encoded = json_encode($details, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             return is_string($encoded) ? trim($encoded) : '';
         }
