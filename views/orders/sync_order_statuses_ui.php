@@ -185,6 +185,7 @@ $inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-w
             form: 'ossForm',
             startBtn: 'ossStartBtn',
             stopBtn: 'ossStopBtn',
+            recoverBtn: 'ossRecoverBtn',
             limit: 'ossLimit',
             batchSize: 'ossBatchSize',
             orderIds: 'ossOrderIds',
