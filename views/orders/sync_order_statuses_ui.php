@@ -136,6 +136,9 @@ $inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm bg-w
             </label>
 
             <div class="flex flex-wrap justify-end gap-3 pt-2 border-t border-gray-100">
+                <button type="button" id="ossRecoverBtn" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-sm font-semibold shadow-sm">
+                    <i class="fas fa-undo"></i> Recover overridden statuses
+                </button>
                 <button type="button" id="ossStopBtn" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                     <i class="fas fa-stop"></i> Stop
                 </button>

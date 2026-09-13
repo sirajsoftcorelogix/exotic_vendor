@@ -297,10 +297,61 @@
             appendLog('Stop requested. Current API call will be cancelled; no further batches will start.', 'warn');
         }
 
+        async function recover() {
+            if (state.running) {
+                return;
+            }
+            var dryEl = el('dryRun');
+            var dryRun = !!(dryEl && dryEl.checked);
+
+            state.running = true;
+            state.stopRequested = false;
+            resetRun();
+            setBusy(true);
+            setProgress(0, 1, 'Scanning for status overrides…');
+            appendLog('Starting status override recovery' + (dryRun ? ' (dry run)' : ' (live write)') + '.');
+
+            try {
+                var res = await postJson({ op: 'recover_overrides', dry_run: dryRun });
+                var summary = res.summary || {};
+                var details = summary.details || [];
+                var count = summary.restored_lines || 0;
+
+                state.totals.checked = summary.checked_candidates || 0;
+                state.totals.updated = count;
+
+                details.forEach(function (d) {
+                    state.details.push({
+                        order_number: d.order_number,
+                        item_code: d.item_code,
+                        old_status: d.old_status,
+                        new_status: d.new_status
+                    });
+                    appendLog('Restored ' + escapeHtml(d.order_number) + ' (' + escapeHtml(d.item_code || '') + '): pending → ' + escapeHtml(d.new_status) + ' (' + escapeHtml(d.reason) + ')', 'ok');
+                });
+
+                if (!count) {
+                    appendLog('No pending order lines found needing recovery.', 'warn');
+                }
+
+                setProgress(1, 1, 'Recovery completed');
+                renderSummary(dryRun ? 'Recovery preview complete' : 'Recovery complete');
+            } catch (err) {
+                renderSummary('Recovery failed');
+                appendLog(escapeHtml(err.message || err), 'error');
+            } finally {
+                state.running = false;
+                state.abortController = null;
+                setBusy(false);
+                refreshCount();
+            }
+        }
+
         function bind() {
             var form = el('form');
             var startBtn = el('startBtn');
             var stopBtn = el('stopBtn');
+            var recoverBtn = el('recoverBtn');
             if (form) {
                 form.addEventListener('submit', function (e) {
                     e.preventDefault();
@@ -317,6 +368,12 @@
                 stopBtn.addEventListener('click', function (e) {
                     e.preventDefault();
                     stop();
+                });
+            }
+            if (recoverBtn) {
+                recoverBtn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    recover();
                 });
             }
             document.querySelectorAll(config.modeSelector || 'input[name="oss_mode"]').forEach(function (input) {
