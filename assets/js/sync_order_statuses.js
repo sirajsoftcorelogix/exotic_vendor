@@ -37,12 +37,16 @@
         function setBusy(isBusy) {
             var startBtn = el('startBtn');
             var stopBtn = el('stopBtn');
+            var recoverBtn = el('recoverBtn');
             var formEls = document.querySelectorAll(config.formSelector || '.oss-field');
             if (startBtn) {
                 startBtn.disabled = isBusy;
                 startBtn.innerHTML = isBusy
                     ? '<i class="fas fa-spinner fa-spin"></i> Running…'
                     : (config.startLabel || '<i class="fas fa-play"></i> Start sync');
+            }
+            if (recoverBtn) {
+                recoverBtn.disabled = isBusy;
             }
             if (stopBtn) {
                 stopBtn.disabled = !isBusy;

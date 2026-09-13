@@ -1772,6 +1772,9 @@
                 </div>
                 <div class="flex justify-end gap-3 pt-3 border-t">
                     <button type="button" onclick="closeSyncOrderStatusModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 text-xs font-semibold">Close</button>
+                    <button type="button" id="syncRecoverBtn" class="px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold text-xs rounded-lg flex items-center gap-2">
+                        <i class="fas fa-undo"></i> Recover overridden statuses
+                    </button>
                     <button type="button" id="syncStopBtn" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg disabled:opacity-50" disabled>
                         <i class="fas fa-stop"></i> Stop
                     </button>
@@ -2885,6 +2888,7 @@
             form: 'syncOrderStatusForm',
             startBtn: 'syncStartBtn',
             stopBtn: 'syncStopBtn',
+            recoverBtn: 'syncRecoverBtn',
             limit: 'syncLimit',
             batchSize: 'syncBatchSize',
             orderIds: 'syncSpecificOrder',
