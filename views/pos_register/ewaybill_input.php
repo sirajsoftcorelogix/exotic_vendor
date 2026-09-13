@@ -37,6 +37,82 @@ if ($invoiceCurrency === '') {
   $invoiceCurrency = 'INR';
 }
 $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
+
+// Normalize & extract shipping fields from orderInfo
+$pickVal = static function (...$candidates): string {
+    foreach ($candidates as $c) {
+        $val = trim((string) $c);
+        if ($val !== '') {
+            return $val;
+        }
+    }
+    return '';
+};
+
+$shipName = $pickVal(
+    $orderInfo['shipping_name'] ?? '',
+    $orderInfo['sname'] ?? '',
+    trim(($orderInfo['shipping_first_name'] ?? '') . ' ' . ($orderInfo['shipping_last_name'] ?? '')),
+    trim(($orderInfo['first_name'] ?? '') . ' ' . ($orderInfo['last_name'] ?? '')),
+    $orderInfo['customer_name'] ?? '',
+    $orderInfo['name'] ?? ''
+);
+
+$shipAddress = $pickVal(
+    $orderInfo['shipping_address'] ?? '',
+    trim(($orderInfo['saddress1'] ?? '') . ' ' . ($orderInfo['saddress2'] ?? '')),
+    trim(($orderInfo['shipping_address_line1'] ?? '') . ' ' . ($orderInfo['shipping_address_line2'] ?? '')),
+    trim(($orderInfo['address_line1'] ?? '') . ' ' . ($orderInfo['address_line2'] ?? '')),
+    $orderInfo['address'] ?? ''
+);
+
+$shipLocation = $pickVal(
+    $orderInfo['shipping_city'] ?? '',
+    $orderInfo['scity'] ?? '',
+    $orderInfo['shipping_location'] ?? '',
+    $orderInfo['city'] ?? ''
+);
+
+$shipPincode = $pickVal(
+    $orderInfo['shipping_zipcode'] ?? '',
+    $orderInfo['szip'] ?? '',
+    $orderInfo['szipcode'] ?? '',
+    $orderInfo['shipping_pincode'] ?? '',
+    $orderInfo['zipcode'] ?? '',
+    $orderInfo['zip'] ?? '',
+    $isExport ? '999999' : '110001'
+);
+
+$rawStateCode = $pickVal(
+    $orderInfo['shipping_state_code'] ?? '',
+    $orderInfo['sstate_code'] ?? '',
+    $orderInfo['state_code'] ?? ''
+);
+$rawStateName = $pickVal(
+    $orderInfo['shipping_state'] ?? '',
+    $orderInfo['sstate'] ?? '',
+    $orderInfo['state'] ?? ''
+);
+
+$shipStateCode = '';
+if ($isExport) {
+    $shipStateCode = '96';
+} elseif (preg_match('/^\d{1,2}$/', $rawStateCode) && (int)$rawStateCode >= 1 && (int)$rawStateCode <= 38) {
+    $shipStateCode = sprintf('%02d', (int)$rawStateCode);
+} else {
+    global $conn;
+    if (isset($conn) && $conn instanceof mysqli) {
+        require_once __DIR__ . '/../../models/country/state.php';
+        $stateModel = new State($conn);
+        $res = $stateModel->resolveGstStateCode($rawStateName, $rawStateCode, 105);
+        if ($res !== null && $res !== '') {
+            $shipStateCode = sprintf('%02d', (int)$res);
+        }
+    }
+}
+if ($shipStateCode === '') {
+    $shipStateCode = $isExport ? '96' : '07';
+}
 ?>
 
   <div class="max-w-5xl mx-auto px-4 py-8">
@@ -275,24 +351,24 @@ $currencyPrefix = $invoiceCurrency === 'INR' ? '₹' : $invoiceCurrency . ' ';
           <div class="space-y-3 text-xs">
             <div>
               <label class="block font-semibold text-slate-700 mb-1">Recipient Name</label>
-              <input type="text" name="ship_name" value="<?= $h(trim(($orderInfo['shipping_first_name'] ?? $orderInfo['first_name'] ?? '') . ' ' . ($orderInfo['shipping_last_name'] ?? $orderInfo['last_name'] ?? ''))) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
+              <input type="text" name="ship_name" value="<?= $h($shipName) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
             </div>
             <div>
               <label class="block font-semibold text-slate-700 mb-1">Address Line 1</label>
-              <input type="text" name="ship_address" value="<?= $h(trim(($orderInfo['shipping_address_line1'] ?? $orderInfo['address_line1'] ?? '') . ' ' . ($orderInfo['shipping_address_line2'] ?? $orderInfo['address_line2'] ?? ''))) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
+              <input type="text" name="ship_address" value="<?= $h($shipAddress) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
             </div>
             <div class="grid grid-cols-3 gap-3">
               <div>
                 <label class="block font-semibold text-slate-700 mb-1">Location / City</label>
-                <input type="text" name="ship_location" value="<?= $h($orderInfo['shipping_city'] ?? $orderInfo['city'] ?? '') ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
+                <input type="text" name="ship_location" value="<?= $h($shipLocation) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 text-slate-800" />
               </div>
               <div>
                 <label class="block font-semibold text-slate-700 mb-1">Pincode</label>
-                <input type="text" name="ship_pincode" value="<?= $h(!empty($orderInfo['shipping_zipcode']) ? $orderInfo['shipping_zipcode'] : (!empty($orderInfo['zipcode']) ? $orderInfo['zipcode'] : ($isExport ? '999999' : '110001'))) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
+                <input type="text" name="ship_pincode" value="<?= $h($shipPincode) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
               </div>
               <div>
                 <label class="block font-semibold text-slate-700 mb-1">State Code</label>
-                <input type="text" name="ship_state_code" value="<?= $h(!empty($orderInfo['shipping_state_code']) ? sprintf('%02d', (int)$orderInfo['shipping_state_code']) : (!empty($orderInfo['state_code']) ? sprintf('%02d', (int)$orderInfo['state_code']) : ($isExport ? '96' : '07'))) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
+                <input type="text" name="ship_state_code" value="<?= $h($shipStateCode) ?>" required class="w-full h-9 rounded-lg border border-slate-300 px-3 font-mono text-slate-800" />
               </div>
             </div>
           </div>
