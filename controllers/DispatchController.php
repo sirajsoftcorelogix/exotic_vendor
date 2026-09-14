@@ -904,6 +904,11 @@ class DispatchController {
                 $primaryOrderNumber = '';
                 if (!empty($invoice['items'][0]['order_number'])) {
                     $primaryOrderNumber = (string) $invoice['items'][0]['order_number'];
+                } elseif (!empty($invoice['vp_order_info_id'])) {
+                    $orderInfoRes = $conn->query("SELECT order_number FROM vp_order_info WHERE id = " . (int)$invoice['vp_order_info_id'] . " LIMIT 1");
+                    if ($orderInfoRes && $orderInfoRow = $orderInfoRes->fetch_assoc()) {
+                        $primaryOrderNumber = (string)($orderInfoRow['order_number'] ?? '');
+                    }
                 }
                 
                 //fetch dispatch records for this invoice   
@@ -969,10 +974,10 @@ class DispatchController {
                     'is_international' => $isInternational,
                     'payment_method' => (string)($invoice['payment_method'] ?? 'Prepaid'),
                     'pickup_locations' => $invoice['pickup_locations'] ?? [],
-                    'items' => array_map(function($it) {
+                    'items' => array_map(function($it) use ($primaryOrderNumber) {
                         return [
                             'id' => (int)($it['id'] ?? 0),
-                            'order_number' => (string)($it['order_number'] ?? ''),
+                            'order_number' => (string)(!empty($it['order_number']) ? $it['order_number'] : $primaryOrderNumber),
                             'groupname' => (string)($it['groupname'] ?? $it['item_name'] ?? $it['sku'] ?? 'Item'),
                             'item_code' => (string)($it['item_code'] ?? 'ITEM'),
                             'quantity' => (int)($it['quantity'] ?? 1),
