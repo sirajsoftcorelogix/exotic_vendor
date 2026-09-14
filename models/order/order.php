@@ -1394,6 +1394,7 @@ class Order
                 continue;
             }
 
+            /*
             $status = strtolower(trim((string)($row['status'] ?? '')));
             if ($status !== 'ready_for_dispatch') {
                 $blocked[] = [
@@ -1405,6 +1406,7 @@ class Order
                 ];
                 continue;
             }
+            */
 
             $eligibleIds[] = $itemId;
             if (!isset($grouped[$orderNumber])) {
@@ -1491,13 +1493,13 @@ class Order
                 if ($itemId <= 0) {
                     continue;
                 }
-                if ($hasInvoice || $status !== 'ready_for_dispatch') {
+                if ($hasInvoice) {
                     $blocked[] = [
                         'order_id' => $itemId,
                         'order_number' => $orderNumber,
                         'item_code' => $itemCode,
-                        'status' => $hasInvoice ? 'invoiced' : $status,
-                        'message' => $hasInvoice ? 'Already invoiced' : "Item status is '{$status}'. Only items with status 'Ready for Dispatch' can be invoiced or dispatched.",
+                        'status' => 'invoiced',
+                        'message' => 'Already invoiced',
                     ];
                     continue;
                 }
