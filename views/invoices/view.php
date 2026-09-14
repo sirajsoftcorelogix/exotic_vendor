@@ -96,9 +96,9 @@ if ($flashNotice === null && isset($_GET['already_created']) && $_GET['already_c
                     <i class="fas fa-globe-americas"></i> Generate Export Documents
                 </a>
             <?php endif; ?>
-            <button type="button" onclick="printDocument('invoice')" class="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-800 hover:bg-orange-100 shadow-sm transition">
+            <a href="<?= htmlspecialchars(base_url('?page=posinvoice&action=print-preview&invoice_id=' . (int)$invoiceId . '&autoprint=1'), ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-800 hover:bg-orange-100 shadow-sm transition">
                 <i class="fas fa-print"></i> Print Invoice
-            </button>
+            </a>
             <?php if ($isIrnGenerated): ?>
                 <button type="button" onclick="printDocument('irn')" class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 shadow-sm transition">
                     <i class="fas fa-file-invoice-dollar"></i> Print E-Invoice (IRN)
