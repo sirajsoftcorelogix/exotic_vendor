@@ -96,7 +96,7 @@ if ($flashNotice === null && isset($_GET['already_created']) && $_GET['already_c
                     <i class="fas fa-globe-americas"></i> Generate Export Documents
                 </a>
             <?php endif; ?>
-            <button type="button" onclick="window.print()" class="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-800 hover:bg-orange-100 shadow-sm transition">
+            <button type="button" onclick="printDocument('invoice')" class="inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-800 hover:bg-orange-100 shadow-sm transition">
                 <i class="fas fa-print"></i> Print Invoice
             </button>
             <?php if ($isIrnGenerated): ?>
@@ -378,7 +378,8 @@ if ($flashNotice === null && isset($_GET['already_created']) && $_GET['already_c
 <script>
 function printDocument(docType) {
     if (docType === 'invoice') {
-        window.print();
+        const printUrl = <?= json_encode(base_url('?page=posinvoice&action=print-preview&invoice_id=' . (int)$invoiceId . '&autoprint=1')) ?>;
+        window.open(printUrl, '_blank');
         return;
     }
     
