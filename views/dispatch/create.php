@@ -9,8 +9,14 @@
           <h1 class="text-2xl font-bold bg-gradient-to-r from-[#1E2939] to-[#4A5565] bg-clip-text text-transparent">
             Ship Order
           </h1>
-          <p class="text-gray-500 text-sm text-[#6A7282]">
-            Process dispatch & courier booking for Invoice #<?php echo htmlspecialchars($_GET['invoice_id'] ?? ''); ?>
+          <p class="text-gray-500 text-sm text-[#6A7282] flex flex-wrap items-center gap-2 mt-1">
+            <span>Invoice #<?php echo htmlspecialchars($_GET['invoice_id'] ?? ''); ?></span>
+            <?php if (!empty($single_order_payload['invoice_number'])): ?>
+              <span class="inline-flex items-center rounded-md bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-800 ring-1 ring-orange-200">Inv No: <?php echo htmlspecialchars($single_order_payload['invoice_number']); ?></span>
+            <?php endif; ?>
+            <?php if (!empty($single_order_payload['order_number'])): ?>
+              <span class="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-800 ring-1 ring-blue-200">Order #<?php echo htmlspecialchars($single_order_payload['order_number']); ?></span>
+            <?php endif; ?>
           </p>
         </div>
       </div>
@@ -68,7 +74,11 @@
                     </div>
                 </div>
 
-                <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-700 border-b border-gray-100 bg-gray-50/50">
+                <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 text-sm text-gray-700 border-b border-gray-100 bg-gray-50/50">
+                    <div>
+                        <span class="text-xs text-gray-500 block">AWB Number</span>
+                        <strong class="font-bold text-gray-900 font-mono"><?php echo htmlspecialchars(!empty($dispatch['awb_code']) ? $dispatch['awb_code'] : 'Pending / Unassigned'); ?></strong>
+                    </div>
                     <div>
                         <span class="text-xs text-gray-500 block">Courier Partner</span>
                         <strong class="font-semibold text-gray-900"><?php echo htmlspecialchars($dispatch['courier_name'] ?? 'N/A'); ?></strong>
