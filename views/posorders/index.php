@@ -2490,6 +2490,7 @@
             for (const id of visibleOrderIds) {
                 const element = document.querySelector('#order-id-' + id);
                 const orderData = JSON.parse(element.getAttribute('data-order'));
+                /*
                 const st = (orderData.status || '').toString().toLowerCase().trim();
                 if (st !== 'ready_for_dispatch') {
                     showOrderNotice(
@@ -2499,6 +2500,7 @@
                     );
                     return;
                 }
+                */
                 if (customerId === null) {
                     customerId = orderData.customer_id;
                 }
@@ -2515,10 +2517,12 @@
                 .then(data => {
                     if (data.success && data.orders) {
                         for (const orderData of data.orders) {
+                            /*
                             const st = (orderData.status || '').toString().toLowerCase().trim();
                             if (st !== 'ready_for_dispatch') {
                                 throw new Error('not_ready_for_dispatch');
                             }
+                            */
                             if (customerId === null) {
                                 customerId = orderData.customer_id;
                             }

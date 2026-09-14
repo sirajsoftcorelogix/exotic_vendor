@@ -2092,8 +2092,9 @@ class DispatchController {
             exit;
         }
 
-        // Validate status: ONLY ready_for_dispatch allowed
-        $validItems = [];
+        // Validate status: ALL items allowed
+        $validItems = $orderItems;
+        /*
         $blockedItems = [];
         foreach ($orderItems as $item) {
             $st = strtolower(trim((string)($item['status'] ?? '')));
@@ -2112,6 +2113,7 @@ class DispatchController {
             ]);
             exit;
         }
+        */
 
         // Group by order_number
         $groupedByOrder = [];
@@ -2361,8 +2363,9 @@ class DispatchController {
                     }
                 }
 
-                // Filter items to ensure only 'ready_for_dispatch' items proceed
-                $readyOrders = [];
+                // Filter items
+                $readyOrders = $orders;
+                /*
                 foreach ($orders as $oRow) {
                     $st = strtolower(trim((string)($oRow['status'] ?? '')));
                     if ($st !== 'ready_for_dispatch') {
@@ -2374,6 +2377,7 @@ class DispatchController {
                 if (empty($readyOrders)) {
                     continue;
                 }
+                */
                 $orders = $readyOrders;
 
                 // Get vp_order_info for address (getDispatchAddress uses vp_order_info id, not vp_orders id)
