@@ -63,7 +63,7 @@ class PayloadBuilder
         $pos = sprintf('%02d', (int) ($customer['state_code'] ?? ($isExport ? 96 : $buyerState)));
 
         // Process line items and compute tax split
-        $isIntrastate = ($sellerState === $buyerState) && !$isExport;
+        $isIntrastate = ($sellerState === $pos) && !$isExport;
         $itemList = [];
         $totalTaxable = 0.0;
         $totalCgst = 0.0;
