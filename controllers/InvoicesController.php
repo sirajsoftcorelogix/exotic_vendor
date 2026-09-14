@@ -190,6 +190,7 @@ class InvoicesController
             exit;
         }
 
+        /*
         // Validate that all selected items have status 'ready_for_dispatch'
         $nonReadyItems = [];
         foreach ($data['data'] as $item) {
@@ -206,6 +207,7 @@ class InvoicesController
             ], 'Items Not Ready For Dispatch');
             exit;
         }
+        */
 
         // Check if an active (non-cancelled) invoice is already generated for any of the selected orders
         $firstOrderNo = trim((string)($data['data'][0]['order_number'] ?? ''));
