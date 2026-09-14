@@ -3984,10 +3984,16 @@ if (!empty($selected_customer) && is_array($selected_customer)) {
 
   function importOrder(orderid, callback = null) {
 
-    const secretKey = 'b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801';
-    const url = 'index.php?page=orders&action=import_orders&secret_key=' + secretKey + '&orderid=' + orderid;
+    const secretKey = '<?= EXPECTED_SECRET_KEY ?>';
+    const url = 'index.php?page=orders&action=import_orders&secret_key=' + secretKey + '&orderid=' + encodeURIComponent(orderid);
 
     fetch(url)
+      .then(res => {
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        return res.text();
+      })
       .then(res => res.text())
       .then(text => {
 
