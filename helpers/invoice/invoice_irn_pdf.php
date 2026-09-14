@@ -291,8 +291,8 @@ function invoice_resolve_irn_details(array $invoice, ?mysqli $conn = null): arra
             $bobj = $barcode->getBarcodeObj(
                 'QRCODE,M',
                 $textToEncode,
-                -4,
-                -4,
+                -6,
+                -6,
                 'black',
                 [0, 0, 0, 0]
             );
@@ -307,7 +307,7 @@ function invoice_resolve_irn_details(array $invoice, ?mysqli $conn = null): arra
         }
     }
 
-    $qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' . urlencode($textToEncode);
+    $qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' . urlencode($textToEncode);
 
     return [
         'irn' => $irn,
