@@ -15,14 +15,23 @@
               <span class="inline-flex items-center rounded-md bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-800 ring-1 ring-orange-200">Inv No: <?php echo htmlspecialchars($single_order_payload['invoice_number']); ?></span>
             <?php endif; ?>
             <?php if (!empty($single_order_payload['order_number'])): ?>
-              <span class="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-800 ring-1 ring-blue-200">Order #<?php echo htmlspecialchars($single_order_payload['order_number']); ?></span>
+              <a href="<?php echo htmlspecialchars(base_url('?page=orders&action=get_order_details_html&type=outer&order_number=' . rawurlencode($single_order_payload['order_number'])), ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener" class="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-800 ring-1 ring-blue-200 hover:bg-blue-100 hover:underline" title="View order details">
+                Order #<?php echo htmlspecialchars($single_order_payload['order_number']); ?>
+              </a>
             <?php endif; ?>
           </p>
         </div>
       </div>
-      <a href="<?php echo base_url('?page=dispatch&action=list'); ?>" class="text-sm font-semibold text-orange-600 hover:text-orange-700 underline">
-        ← Back to Dispatch List
-      </a>
+      <div class="flex flex-wrap items-center gap-2">
+        <?php if (!empty($_GET['invoice_id'])): ?>
+          <a href="<?php echo htmlspecialchars(base_url('?page=invoices&action=generate_pdf&invoice_id=' . (int)$_GET['invoice_id']), ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener" class="text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 border border-blue-200 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 transition">
+            📄 Download Invoice PDF
+          </a>
+        <?php endif; ?>
+        <a href="<?php echo base_url('?page=dispatch&action=list'); ?>" class="text-sm font-semibold text-orange-600 hover:text-orange-700 underline">
+          ← Back to Dispatch List
+        </a>
+      </div>
     </div>
 
     <?php if (isset($_GET['status']) && $_GET['status'] === 'error' && isset($_GET['message'])): ?>
@@ -357,7 +366,9 @@ window.SINGLE_DISPATCH_PAYLOAD = <?php echo json_encode($single_order_payload ??
                          data-item-code="${escapeHtml(it.item_code)}"
                          data-weight="${w}"
                          data-groupname="${escapeHtml(it.groupname)}">
-                        <div class="col-span-2 font-medium">${escapeHtml(it.order_number || payload.order_number)}</div>
+                        <div class="col-span-2 font-medium">
+                          ${it.order_number ? `<a href="?page=orders&action=get_order_details_html&type=outer&order_number=${encodeURIComponent(it.order_number)}" target="_blank" rel="noopener" class="text-blue-600 hover:underline font-semibold">${escapeHtml(it.order_number)}</a>` : escapeHtml(payload.order_number)}
+                        </div>
                         <div class="col-span-3 font-semibold text-gray-800 truncate">${escapeHtml(it.groupname)}</div>
                         <div class="col-span-2 text-right text-gray-600 font-mono">${escapeHtml(it.item_code)}</div>
                         <div class="col-span-1 text-right">${it.quantity || 1}</div>
@@ -381,11 +392,14 @@ window.SINGLE_DISPATCH_PAYLOAD = <?php echo json_encode($single_order_payload ??
                     <div class="flex items-center gap-3 min-w-0">
                         ${tm.intlPill}
                         <h2 class="text-base font-bold truncate">
-                            Order #${escapeHtml(payload.order_number)} · ${escapeHtml(payload.customer_name)}
+                            <a href="?page=orders&action=get_order_details_html&type=outer&order_number=${encodeURIComponent(payload.order_number)}" target="_blank" rel="noopener" class="underline hover:opacity-90" title="View Order Details">Order #${escapeHtml(payload.order_number)}</a> · ${escapeHtml(payload.customer_name)}
                         </h2>
                     </div>
                     <div class="flex items-center gap-2 text-xs font-semibold bg-white/20 px-3 py-1.5 rounded-lg backdrop-blur">
                         <span>Invoice #${escapeHtml(payload.invoice_number || payload.invoice_id)}</span>
+                        <a href="?page=invoices&action=generate_pdf&invoice_id=${encodeURIComponent(payload.invoice_id)}" target="_blank" rel="noopener" class="ml-1 bg-white/30 hover:bg-white/40 px-2 py-0.5 rounded text-[11px] underline" title="Download Invoice PDF">
+                          Download
+                        </a>
                     </div>
                 </div>
 
