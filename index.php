@@ -1952,6 +1952,9 @@ switch ($page) {
             case 'bulk_create_invoices_dispatch':
                 $controller->bulkCreateInvoicesDispatch();
                 break;
+            case 'export_bulk_dispatch_excel':
+                $controller->exportBulkDispatchExcel();
+                break;
             case 'export_bluedart_excel':
                 $controller->exportBlueDartExcel();
                 break;

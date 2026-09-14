@@ -190,6 +190,23 @@ class InvoicesController
             exit;
         }
 
+        // Validate that all selected items have status 'ready_for_dispatch'
+        $nonReadyItems = [];
+        foreach ($data['data'] as $item) {
+            $st = strtolower(trim((string)($item['status'] ?? '')));
+            if ($st !== 'ready_for_dispatch') {
+                $nonReadyItems[] = 'Order #' . ($item['order_number'] ?? '') . ' Item: ' . ($item['item_code'] ?? $item['id']) . ' (Status: ' . ($item['status'] ?? 'unknown') . ')';
+            }
+        }
+        if (!empty($nonReadyItems)) {
+            unset($_SESSION['invoice_items']);
+            unset($_SESSION['invoice_pos_flag']);
+            renderTemplate('views/errors/not_found.php', [
+                'message' => 'Invoicing is only allowed for items with status "Ready for Dispatch". The following items are not ready: ' . implode(', ', $nonReadyItems)
+            ], 'Items Not Ready For Dispatch');
+            exit;
+        }
+
         // Check if an active (non-cancelled) invoice is already generated for any of the selected orders
         $firstOrderNo = trim((string)($data['data'][0]['order_number'] ?? ''));
         if ($firstOrderNo !== '') {

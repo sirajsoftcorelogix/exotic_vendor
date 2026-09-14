@@ -563,6 +563,7 @@
                             <a href="#" id="action-assign-to" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Assign To</a>
                             <a href="javascript:void(0)" id="action-add-to-purchase-list" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to purchase list</a>
                             <a href="javascript:void(0)" id="action-add-to-invoice" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Invoice</a>
+                            <a href="javascript:void(0)" id="action-bulk-dispatch" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Bulk Dispatch & Export Excel</a>
                         </div>
                     </div>
                 </div>
@@ -723,7 +724,7 @@
                                 <div class="flex-shrink-0 pt-1">
                                     <?php //if($order['status']=='pending'): 
                                     ?>
-                                    <input type="checkbox" name="poitem[]" value="<?= $order['order_id'] ?>" class="custom-checkbox">
+                                    <input type="checkbox" name="poitem[]" value="<?= $order['order_id'] ?>" class="custom-checkbox" data-status="<?= htmlspecialchars((string)($order['status'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-order-number="<?= htmlspecialchars((string)($order['order_number'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-item-code="<?= htmlspecialchars((string)($order['item_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                                     <?php //endif; 
                                     ?>
                                 </div>
@@ -1424,6 +1425,7 @@
     </div>
 </div>
 <!-- ...success popup... -->
+<script src="<?= htmlspecialchars(base_url('assets/js/pos_message_modal.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
 <script>
     function closeImagePopup(event) {
         document.getElementById('imagePopup').classList.add('hidden');
@@ -2313,16 +2315,30 @@
         return true;
     }
 
+    function showOrderNotice(title, message, tone) {
+        if (typeof window.showPosMessageModal === 'function') {
+            window.showPosMessageModal({
+                title: title || 'Notice',
+                message: message,
+                tone: tone || 'warning'
+            });
+        } else if (typeof showAlert === 'function') {
+            showAlert(message, tone === 'error' ? 'error' : 'warning');
+        } else {
+            alert((title ? title + ': ' : '') + message);
+        }
+    }
+
     // Add to Invoice handler
     document.getElementById('action-add-to-invoice').addEventListener('click', function(e) {
         e.preventDefault();
         const oids = getSelectedOrderIds();
         if (oids.length === 0) {
-            showAlert('Please select at least one order to create invoice.', 'warning');
+            showOrderNotice('Selection Required', 'Please select at least one order to create invoice.', 'warning');
             return;
         }
 
-        // Validate customer_id for all selected orders
+        // Validate customer_id and ready_for_dispatch status for all selected orders
         let validationPromise = Promise.resolve();
         let customerId = null;
         const visibleOrderIds = [];
@@ -2342,16 +2358,27 @@
         for (const id of visibleOrderIds) {
             const element = document.querySelector('#order-id-' + id);
             const orderData = JSON.parse(element.getAttribute('data-order'));
-            //console.log('Order', id, 'customer_id:', orderData.customer_id);
+
+            // Status Gate: Only ready_for_dispatch items allowed
+            const st = (orderData.status || '').toString().toLowerCase().trim();
+            if (st !== 'ready_for_dispatch') {
+                showOrderNotice(
+                    'Ready for Dispatch Required',
+                    'Only items with status "Ready for Dispatch" can be added to an invoice or dispatched. Item #' + (orderData.item_code || id) + ' (Order #' + (orderData.order_number || '') + ') has status "' + (orderData.status || 'unknown') + '".',
+                    'warning'
+                );
+                return;
+            }
+
             if (customerId === null) {
                 customerId = orderData.customer_id;
             } else if (customerId !== orderData.customer_id) {
-                showAlert('Selected orders belong to different customers. Please select orders for the same customer to create an invoice.', 'error');
+                showOrderNotice('Customer Mismatch', 'Selected orders belong to different customers. Please select orders for the same customer to create an invoice.', 'error');
                 return;
             }
 
             if (orderHasBlockingInvoice(orderData)) {
-                showAlert('One or more selected orders already have an active invoice. Cancel or use a different order.', 'error');
+                showOrderNotice('Active Invoice Exists', 'One or more selected orders already have an active invoice. Cancel or use a different order.', 'error');
                 return;
             }
         }
@@ -2371,7 +2398,10 @@
                 .then(data => {
                     if (data.success && data.orders) {
                         for (const orderData of data.orders) {
-                            console.log('Fetched Order', orderData.order_id, 'customer_id:', orderData.customer_id);
+                            const st = (orderData.status || '').toString().toLowerCase().trim();
+                            if (st !== 'ready_for_dispatch') {
+                                throw new Error('not_ready_for_dispatch');
+                            }
                             if (customerId === null) {
                                 customerId = orderData.customer_id;
                             } else if (customerId !== orderData.customer_id) {
@@ -2385,10 +2415,12 @@
                 })
                 .catch(error => {
                     console.error('Error fetching order data:', error);
-                    if (error.message === 'active_invoice') {
-                        showAlert('One or more selected orders already have an active invoice. Cancel or use a different order.', 'error');
+                    if (error.message === 'not_ready_for_dispatch') {
+                        showOrderNotice('Ready for Dispatch Required', 'Only items with status "Ready for Dispatch" can be added to an invoice or dispatched.', 'warning');
+                    } else if (error.message === 'active_invoice') {
+                        showOrderNotice('Active Invoice Exists', 'One or more selected orders already have an active invoice. Cancel or use a different order.', 'error');
                     } else {
-                        showAlert('Different customers. Cannot create invoice.', 'error');
+                        showOrderNotice('Customer Mismatch', 'Selected orders belong to different customers. Cannot create invoice.', 'error');
                     }
                     throw error;
                 });
@@ -2418,10 +2450,86 @@
                 form.submit();
             })
             .catch(error => {
-                // Error handling already done in AJAX catch block
                 console.error('Validation failed:', error);
             });
     });
+
+    // Bulk Dispatch & Excel Export handler
+    const bulkDispatchBtn = document.getElementById('action-bulk-dispatch');
+    if (bulkDispatchBtn) {
+        bulkDispatchBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const oids = getSelectedOrderIds();
+            if (oids.length === 0) {
+                showOrderNotice('Selection Required', 'Please select at least one order to dispatch.', 'warning');
+                return;
+            }
+
+            const visibleOrderIds = [];
+            const hiddenOrderIds = [];
+            let customerId = null;
+
+            for (const id of oids) {
+                const element = document.querySelector('#order-id-' + id);
+                if (element) {
+                    visibleOrderIds.push(id);
+                } else {
+                    hiddenOrderIds.push(id);
+                }
+            }
+
+            for (const id of visibleOrderIds) {
+                const element = document.querySelector('#order-id-' + id);
+                const orderData = JSON.parse(element.getAttribute('data-order'));
+                const st = (orderData.status || '').toString().toLowerCase().trim();
+                if (st !== 'ready_for_dispatch') {
+                    showOrderNotice(
+                        'Ready for Dispatch Required',
+                        'Only items with status "Ready for Dispatch" can be dispatched. Item #' + (orderData.item_code || id) + ' (Order #' + (orderData.order_number || '') + ') has status "' + (orderData.status || 'unknown') + '".',
+                        'warning'
+                    );
+                    return;
+                }
+                if (customerId === null) {
+                    customerId = orderData.customer_id;
+                }
+            }
+
+            let checkPromise = Promise.resolve();
+            if (hiddenOrderIds.length > 0) {
+                checkPromise = fetch('index.php?page=posorders&action=get_orders_customer_id', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ order_ids: hiddenOrderIds })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.orders) {
+                        for (const orderData of data.orders) {
+                            const st = (orderData.status || '').toString().toLowerCase().trim();
+                            if (st !== 'ready_for_dispatch') {
+                                throw new Error('not_ready_for_dispatch');
+                            }
+                            if (customerId === null) {
+                                customerId = orderData.customer_id;
+                            }
+                        }
+                    }
+                });
+            }
+
+            checkPromise.then(() => {
+                const url = 'index.php?page=dispatch&action=bulk_dispatch&import_ids=' + encodeURIComponent(oids.join(',')) + (customerId ? '&customer_id=' + customerId : '');
+                window.location.href = url;
+            }).catch(err => {
+                if (err.message === 'not_ready_for_dispatch') {
+                    showOrderNotice('Ready for Dispatch Required', 'Only items with status "Ready for Dispatch" can be dispatched.', 'warning');
+                } else {
+                    showOrderNotice('Error', 'Could not validate selected orders for dispatch.', 'error');
+                }
+            });
+        });
+    }
 
     //clear selected orders from localStorage on page unload
     function clearSelectedOrders() {

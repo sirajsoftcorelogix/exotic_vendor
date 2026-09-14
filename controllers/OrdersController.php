@@ -2245,7 +2245,10 @@ class OrdersController
                     $invStatus = $invId > 0 ? $ordersModel->getInvoiceStatusByInvoiceId($invId) : null;
                     $orders[] = [
                         'order_id' => $order_id,
+                        'order_number' => $order['order_number'] ?? null,
                         'customer_id' => $order['customer_id'] ?? null,
+                        'status' => $order['status'] ?? null,
+                        'item_code' => $order['item_code'] ?? null,
                         'invoice_id' => $order['invoice_id'] ?? null,
                         'invoice_status' => $invStatus,
                     ];
