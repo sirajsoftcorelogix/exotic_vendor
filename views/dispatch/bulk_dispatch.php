@@ -897,12 +897,13 @@
                                 <div class="flex flex-wrap items-center gap-6 text-xs sm:text-sm">
                                     <div>
                                         <span class="font-semibold text-gray-700">Total Weight (kg):</span>
-                                        <input type="text" name="weight" value="0.000"
+                                        <input type="text" name="weight" value="" placeholder="0.000"
                                                class="weight-input ml-1 border border-gray-300 rounded px-2 py-0.5 w-20 text-xs"/>
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <span class="font-semibold text-gray-700">Box Size:</span>
                                         <select class="BoxSize border border-gray-300 rounded px-2 py-0.5 text-xs w-28">
+                                            <option value="" selected disabled>Select Box Size</option>
                                             <option value="R-1" data-length="22" data-width="17" data-height="5">R-1 (22x17x5 inch)</option>
                                             <option value="R-2" data-length="16" data-width="13" data-height="13">R-2 (16x13x13 inch)</option>
                                             <option value="R-3" data-length="16" data-width="11" data-height="7">R-3 (16x11x7 inch)</option>
@@ -2113,12 +2114,13 @@
                                 <div class="flex flex-wrap items-center gap-6 text-xs sm:text-sm">
                                     <div>
                                         <span class="font-semibold text-gray-700">Total Weight (kg):</span>
-                                        <input type="text" name="weight" value="0.000"
+                                        <input type="text" name="weight" value="" placeholder="0.000"
                                                class="weight-input ml-1 border border-gray-300 rounded px-2 py-0.5 w-20 text-xs"/>
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <span class="font-semibold text-gray-700">Box Size:</span>
                                         <select class="BoxSize border border-gray-300 rounded px-2 py-0.5 text-xs w-28">
+                                            <option value="" selected disabled>Select Box Size</option>
                                             <option value="R-1" data-length="22" data-width="17" data-height="5">R-1 (22x17x5 inch)</option>
                                             <option value="R-2" data-length="16" data-width="13" data-height="13">R-2 (16x13x13 inch)</option>
                                             <option value="R-3" data-length="16" data-width="11" data-height="7">R-3 (16x11x7 inch)</option>
@@ -3440,11 +3442,12 @@
                     <div class="flex flex-wrap items-center gap-6 text-xs sm:text-sm">
                         <div>
                             <span class="font-semibold text-gray-700">Total Weight (kg):</span>
-                            <input type="text" name="weight" value="0.000" class="weight-input ml-1 border border-gray-300 rounded px-2 py-0.5 w-20 text-xs"/>
+                            <input type="text" name="weight" value="" placeholder="0.000" class="weight-input ml-1 border border-gray-300 rounded px-2 py-0.5 w-20 text-xs"/>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="font-semibold text-gray-700">Box Size:</span>
                             <select class="BoxSize border border-gray-300 rounded px-2 py-0.5 text-xs w-28">
+                                <option value="" selected disabled>Select Box Size</option>
                                 <option value="R-1" data-length="22" data-width="17" data-height="5">R-1 (22x17x5 inch)</option>
                                 <option value="R-2" data-length="16" data-width="13" data-height="13">R-2 (16x13x13 inch)</option>
                                 <option value="R-3" data-length="16" data-width="11" data-height="7">R-3 (16x11x7 inch)</option>
