@@ -3612,7 +3612,46 @@ class PosInvoiceController
         require_once __DIR__ . '/../helpers/invoice/invoice_address_html.php';
         require_once __DIR__ . '/../helpers/invoice/invoice_footer_html.php';
         require_once __DIR__ . '/../helpers/invoice/invoice_terms_html.php';
+        require_once __DIR__ . '/../helpers/invoice/invoice_irn_pdf.php';
         global $paymentModel;
+        $irnDetails = invoice_resolve_irn_details($invoice, $conn);
+        $hasIrn = !empty($irnDetails['irn']);
+
+        $headerRightBlock = '';
+        if ($hasIrn) {
+            $qrBlockHtml = '';
+            if (!empty($irnDetails['qr_data_uri'])) {
+                $qrBlockHtml = '<img src="' . htmlspecialchars($irnDetails['qr_data_uri']) . '" alt="E-Invoice QR Code" style="width: 120px; height: 120px; display: inline-block; vertical-align: top; border: 1px solid #ddd; padding: 2px;" />';
+            }
+            $headerRightBlock = '
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="width: 50%; vertical-align: top; text-align: center; padding-right: 10px;">
+                        ' . $qrBlockHtml . '
+                    </td>
+                    <td style="width: 50%; vertical-align: top; text-align: right;">
+                        <div class="invoice-title" style="font-size: 22px;">TAX INVOICE</div>
+                        <div class="subtitle" style="font-size: 13px;">ORIGINAL FOR RECIPIENT</div>
+                        <div class="subtitle" style="font-size: 13px; margin-top: 4px;">Date: ' . date('d M Y', strtotime($invoice['invoice_date'])) . '</div>
+                        <div class="subtitle" style="font-size: 13px;">Invoice No: ' . htmlspecialchars($invoice['invoice_number'] ?? 'N/A') . '</div>
+                    </td>
+                </tr>
+            </table>';
+        } else {
+            $headerRightBlock = '
+                <div class="invoice-title">TAX INVOICE</div>
+                <div class="subtitle">ORIGINAL FOR RECIPIENT</div>
+                <div class="subtitle">Date: ' . date('d M Y', strtotime($invoice['invoice_date'])) . '</div>
+                <div class="subtitle">Invoice No: ' . htmlspecialchars($invoice['invoice_number'] ?? 'N/A') . '</div>';
+        }
+
+        $irnBannerHtml = '';
+        if ($hasIrn) {
+            $irnBannerHtml = '<div style="margin-top: 10px; text-align: right; font-size: 12px; font-family: DejaVu Sans, Arial, sans-serif;">'
+                . '<span style="font-weight: bold; color: #000;">IRN: </span>'
+                . '<span style="font-family: monospace; font-size: 11px; word-break: break-all; color: #111;">' . htmlspecialchars($irnDetails['irn']) . '</span>'
+                . '</div>';
+        }
         $exclusiveStoresHeader = invoice_resolve_exclusive_stores_footer_html(
             $invoice,
             $items,
@@ -3670,6 +3709,8 @@ class PosInvoiceController
             [
                 '{{INVOICE_NUMBER}}',
                 '{{INVOICE_DATE}}',
+                '{{HEADER_RIGHT_BLOCK}}',
+                '{{IRN_BANNER_BLOCK}}',
                 '{{BILL_TO_INFO}}',
                 '{{SHIP_TO_INFO}}',
                 '{{ITEM_ROWS}}',
@@ -3683,6 +3724,8 @@ class PosInvoiceController
             [
                 htmlspecialchars($invoice['invoice_number'] ?? 'N/A'),
                 date('d M Y', strtotime($invoice['invoice_date'])),
+                $headerRightBlock,
+                $irnBannerHtml,
                 $billToInfo,
                 $shipToInfo,
                 $itemsrows,
