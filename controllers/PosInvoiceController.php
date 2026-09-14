@@ -3501,7 +3501,7 @@ class PosInvoiceController
                         <td class="right bold">' . number_format($totalCgstAmt, 2) . '</td>
                         <td class="right bold"></td>
                         <td class="right bold">' . number_format($totalIgstAmt, 2) . '</td>
-                        <td class="right bold">' . number_format($totalAmount, 2) . '</td>
+                        <td class="right bold">' . number_format($tableLineTotal, 2) . '</td>
                     </tr>
                 ';
             } else {
@@ -3516,7 +3516,7 @@ class PosInvoiceController
                         <td class="right bold">' . number_format($totalCgstAmt, 2) . '</td>
                         <td class="right bold"></td>
                         <td class="right bold">' . number_format($totalIgstAmt, 2) . '</td>
-                        <td class="right bold">' . number_format($totalAmount, 2) . '</td>
+                        <td class="right bold">' . number_format($tableLineTotal, 2) . '</td>
                     </tr>
                 ';
             }
@@ -3532,7 +3532,7 @@ class PosInvoiceController
                         <td class="right bold">' . number_format($totalCgstAmt, 2) . '</td>
                         <td class="right bold"></td>
                         <td class="right bold">' . number_format($totalIgstAmt, 2) . '</td>
-                        <td class="right bold">' . number_format($totalAmount, 2) . '</td>
+                        <td class="right bold">' . number_format($tableLineTotal, 2) . '</td>
                     </tr>
             ';
         }
