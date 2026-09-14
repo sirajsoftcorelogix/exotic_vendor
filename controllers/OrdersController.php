@@ -173,173 +173,163 @@ class OrdersController
 
     public function importOrders()
     {
-        //is_login();
+        @set_time_limit(300);
+        @ini_set('memory_limit', '512M');
+
         global $ordersModel;
         global $productModel;
         if (!isset($_GET['secret_key']) || $_GET['secret_key'] !== EXPECTED_SECRET_KEY) {
             http_response_code(403); // Forbidden
             die('Unauthorized access.');
         }
-        //order status list
+        // order status list
         $statusList = $ordersModel->adminOrderStatusList('true');
-        //last order log fetch
+        // last order log fetch
         $lastLog = $ordersModel->getLastImportLog();
 
-        //log create
+        // log create
         $log_data = ['start_time' => date('Y-m-d H:i:s')];
         $log_id = 0;
 
         if ($logs = $ordersModel->orderImportLog($log_data)) {
             $log_id = $logs['insert_id'];
-        }        // Set your date range (example: last 7 days)
-
-        $from_date = strtotime('-1 days');
-        $hasCustomRange = false;
-
-        if (!empty($_GET['from_date']) || !empty($_POST['from_date'])) {
-            $rawFrom = trim((string)($_GET['from_date'] ?? $_POST['from_date'] ?? ''));
-            $parsedFrom = is_numeric($rawFrom) ? (int)$rawFrom : strtotime($rawFrom);
-            if ($parsedFrom && $parsedFrom > 0) {
-                $from_date = $parsedFrom;
-                $hasCustomRange = true;
-            }
-        } elseif (!empty($_GET['days']) || !empty($_POST['days'])) {
-            $daysInt = max(1, min(365, (int)($_GET['days'] ?? $_POST['days'] ?? 1)));
-            $from_date = strtotime("-{$daysInt} days");
-            $hasCustomRange = true;
-        } elseif ($lastLog && !empty($lastLog['max_ordered_time'])) {
-            // 1-hour rolling lookback buffer (3600 seconds) to prevent skipping orders
-            $from_date = max(strtotime('-7 days'), (int)$lastLog['max_ordered_time'] - 3600);
         }
 
-        $to_date = time();
-        if (!empty($_GET['to_date']) || !empty($_POST['to_date'])) {
-            $rawTo = trim((string)($_GET['to_date'] ?? $_POST['to_date'] ?? ''));
-            $parsedTo = is_numeric($rawTo) ? (int)$rawTo : strtotime($rawTo);
-            if ($parsedTo && $parsedTo > 0) {
-                $to_date = $parsedTo;
-                $hasCustomRange = true;
+        $rawOrderId = trim((string)($_GET['orderid'] ?? $_POST['orderid'] ?? ''));
+        $orderIds = [];
+        if ($rawOrderId !== '') {
+            foreach (explode(',', $rawOrderId) as $part) {
+                $part = trim($part);
+                if ($part !== '') {
+                    $orderIds[] = $part;
+                }
             }
         }
-        //$from_date = strtotime(date('12-08-2025 00:00:00')); // Example fixed date
-        //$to_date = strtotime(date('13-08-2025 00:00:00'));
-        //$from_date = 1755101792; // Example fixed date 12-08-2025 00:00:00
-        //$to_date = 1755102092;   // Example fixed date 13-08-2025 23:59:59
-        //$url = 'https://www.exoticindia.com/action';
-        $url = 'https://www.exoticindia.com/vendor-api/order/fetch'; // Production API new endpoint
 
-        $postData = [
-            'makeRequestOf' => 'vendors-orderjson',
-            'from_date' => $from_date,
-            'to_date' => $to_date
-        ];
-        if (!empty($_GET['orderid'])) {
+        $ordersList = [];
+
+        if ($orderIds !== []) {
+            foreach ($orderIds as $id) {
+                $resp = $this->fetchVendorApiOrders([
+                    'makeRequestOf' => 'vendors-orderjson',
+                    'orderid' => $id
+                ]);
+                if (!empty($resp['orders']) && is_array($resp['orders'])) {
+                    foreach ($resp['orders'] as $ord) {
+                        $ordersList[] = $ord;
+                    }
+                }
+            }
+            $from_date = time();
+            $to_date = time();
+            $hasCustomRange = false;
+        } else {
+            $from_date = strtotime('-1 days');
+            $hasCustomRange = false;
+
+            if (!empty($_GET['from_date']) || !empty($_POST['from_date'])) {
+                $rawFrom = trim((string)($_GET['from_date'] ?? $_POST['from_date'] ?? ''));
+                $parsedFrom = is_numeric($rawFrom) ? (int)$rawFrom : strtotime($rawFrom);
+                if ($parsedFrom && $parsedFrom > 0) {
+                    $from_date = $parsedFrom;
+                    $hasCustomRange = true;
+                }
+            } elseif (!empty($_GET['days']) || !empty($_POST['days'])) {
+                $daysInt = max(1, min(365, (int)($_GET['days'] ?? $_POST['days'] ?? 1)));
+                $from_date = strtotime("-{$daysInt} days");
+                $hasCustomRange = true;
+            } elseif ($lastLog && !empty($lastLog['max_ordered_time'])) {
+                // 1-hour rolling lookback buffer (3600 seconds) to prevent skipping orders
+                $from_date = max(strtotime('-7 days'), (int)$lastLog['max_ordered_time'] - 3600);
+            }
+
+            $to_date = time();
+            if (!empty($_GET['to_date']) || !empty($_POST['to_date'])) {
+                $rawTo = trim((string)($_GET['to_date'] ?? $_POST['to_date'] ?? ''));
+                $parsedTo = is_numeric($rawTo) ? (int)$rawTo : strtotime($rawTo);
+                if ($parsedTo && $parsedTo > 0) {
+                    $to_date = $parsedTo;
+                    $hasCustomRange = true;
+                }
+            }
+
             $postData = [
                 'makeRequestOf' => 'vendors-orderjson',
-                'orderid' => $_GET['orderid']
+                'from_date' => $from_date,
+                'to_date' => $to_date
             ];
-        }
 
-        $headers = [
-            'x-api-key: K7mR9xQ3pL8vN2sF6wE4tY1uI0oP5aZ9',
-            'x-adminapitest: 1',
-            'Content-Type: application/x-www-form-urlencoded'
-        ];
+            $orders = $this->fetchVendorApiOrders($postData);
 
-        // Initialize cURL
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_POST, true);
+            if (isset($orders['error'])) {
+                renderTemplateClean('views/errors/error.php', ['message' => 'API request failed: ' . $orders['error']], 'API Error');
+                return;
+            }
 
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        //curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        $response = curl_exec($ch);
+            if (!is_array($orders)) {
+                renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'success', 'text' => 'Invalid API response format.']], 'API Error');
+                return;
+            }
 
-        $error = curl_error($ch);
-        curl_close($ch);
-        // print_r($error);
-        // print_r($headers);
-        // print_r($response);
-        if ($response === false) {
-            renderTemplateClean('views/errors/error.php', ['message' => 'API request failed: ' . $error], 'API Error');
-            return;
-        }
+            if (empty($orders['orders'])) {
+                renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'success', 'text' => 'No orders found in the API response.']], 'No Orders Found');
+                return;
+            }
 
-        $orders = json_decode($response, true);
-        if (!is_array($orders)) {
-            //echo "Invalid API response format.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'success', 'text' => 'Invalid API response format.']], 'API Error');
-            return;
-        }
-        // print_array($orders);
-        // exit;
-        if (empty($orders['orders'])) {
-            //echo "No orders found in the API response.";
-            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'success', 'text' => 'No orders found in the API response.']], 'No Orders Found');
-            return;
-        }
-        //page
-        $page = $orders['total_pages'];
-        if ($page > 1) {
-            for ($i = 2; $i <= $page; $i++) {
-                $postData['page'] = $i;
-                $ch = curl_init($url);
-                curl_setopt($ch, CURLOPT_POST, true);
-                curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-                $response = curl_exec($ch);
-                $error = curl_error($ch);
-                curl_close($ch);
-                if ($response === false) {
-                    renderTemplateClean('views/errors/error.php', ['message' => 'API request failed on page ' . $i . ': ' . $error], 'API Error');
-                    return;
-                }
-                $pageOrders = json_decode($response, true);
-                if (is_array($pageOrders) && !empty($pageOrders['orders'])) {
-                    $orders['orders'] = array_merge($orders['orders'], $pageOrders['orders']);
+            $ordersList = $orders['orders'];
+            $page = (int)($orders['total_pages'] ?? 1);
+            if ($page > 1) {
+                $maxPages = min($page, 10);
+                for ($i = 2; $i <= $maxPages; $i++) {
+                    $postData['page'] = $i;
+                    $pageOrders = $this->fetchVendorApiOrders($postData);
+                    if (is_array($pageOrders) && !empty($pageOrders['orders'])) {
+                        $ordersList = array_merge($ordersList, $pageOrders['orders']);
+                    }
                 }
             }
         }
-        $batch = $this->importVendorOrdersFromApiPayload($orders['orders']);
+
+        if (empty($ordersList)) {
+            renderTemplateClean('views/errors/error.php', ['message' => ['type' => 'success', 'text' => 'No orders found to import.']], 'No Orders Found');
+            return;
+        }
+
+        $batch = $this->importVendorOrdersFromApiPayload($ordersList);
         $imported = $batch['imported'];
         $totalorder = $batch['total'];
         $result = $batch['result'];
         $pdata = $batch['pdata'];
         $addressdata = $batch['addressdata'];
 
-        $isSingleOrderImport = !empty($_GET['orderid']) || !empty($_POST['orderid']);
+        $isSingleOrderImport = !empty($orderIds);
         $isCustomRangeImport = $hasCustomRange;
 
         $maxOrderedTimeForLog = (int)($lastLog['max_ordered_time'] ?? $from_date);
         if (!$isSingleOrderImport && !$isCustomRangeImport) {
-            foreach ($orders['orders'] ?? [] as $ord) {
+            foreach ($ordersList as $ord) {
                 $pt = (int)($ord['processed_time'] ?? 0);
                 if ($pt > $maxOrderedTimeForLog) {
                     $maxOrderedTimeForLog = $pt;
                 }
             }
         }
-        //print_array($pdata);
-        //print_r($result);
-        //update log end time and imported count
+
         if ($log_id > 0) {
             $log_update_data = [
                 'end_time' => date('Y-m-d H:i:s'),
                 'successful_imports' => $imported,
                 'total_orders' => $totalorder,
-                'error' => isset($error) ? $error : '',
-                'log_details' => NULL, //json_encode($result),
+                'error' => '',
+                'log_details' => NULL,
                 'max_ordered_time' => $maxOrderedTimeForLog,
                 'from_date' => $from_date,
                 'to_date' => $to_date,
-                'add_product_log' => NULL, //json_encode($pdata)
+                'add_product_log' => NULL
             ];
-            //print_array($log_update_data);
             $ordersModel->updateOrderImportLog($log_id, $log_update_data);
         }
-        //print_array($result);
+
         renderTemplateClean('views/orders/import_result.php', [
             'imported' => $imported,
             'result' => $result,

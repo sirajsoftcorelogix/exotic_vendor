@@ -1636,10 +1636,15 @@
         const form = this;
         const formData = new FormData(form);
 
-        fetch('index.php?page=posorders&action=import_orders&secret_key=b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801&orderid=' + orderId, {
+        fetch('index.php?page=posorders&action=import_orders&secret_key=<?= EXPECTED_SECRET_KEY ?>&orderid=' + encodeURIComponent(orderId), {
                 method: 'GET',
             })
-            .then(response => response.text())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status} (${response.statusText || 'Bad Gateway'}). Server timed out or encountered an error.`);
+                }
+                return response.text();
+            })
             .then(text => {
                 // Try to parse JSON; if parsing fails, treat response as HTML/text
                 try {

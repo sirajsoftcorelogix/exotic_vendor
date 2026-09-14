@@ -2526,17 +2526,27 @@
         updateImportProgressBar(30, 'Sending import request to server...');
 
         try {
-            const url = 'index.php?page=orders&action=import_orders&secret_key=b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801&orderid=' + encodeURIComponent(orderId);
+            const url = 'index.php?page=orders&action=import_orders&secret_key=<?= EXPECTED_SECRET_KEY ?>&orderid=' + encodeURIComponent(orderId);
             const response = await fetch(url, { method: 'GET' });
+            
+            if (!response.ok) {
+                let errDetail = `Server returned HTTP ${response.status} (${response.statusText || 'Error'})`;
+                if (response.status === 502) {
+                    errDetail = `HTTP 502 Bad Gateway: The server timed out processing this request. Try importing specific Order ID(s) or use "Find & List Missing Orders" to import in smaller batches.`;
+                }
+                throw new Error(errDetail);
+            }
+
             const text = await response.text();
 
-            updateImportProgressBar(100, 'Import completed successfully.');
+            updateImportProgressBar(100, 'Import completed.');
             hasImportedOrdersState = true;
             appendImportLogConsole(`✓ Server Response: Import completed successfully.`);
             document.getElementById('importStatus').innerHTML = text;
         } catch (err) {
+            updateImportProgressBar(0, 'Import failed.');
             appendImportLogConsole(`❌ Import Error: ${err.message}`);
-            alert('Import failed: ' + err.message);
+            document.getElementById('importStatus').innerHTML = `<div class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 text-xs font-medium"><i class="fa-solid fa-triangle-exclamation text-red-600 mr-2"></i>${escapeHtmlImport(err.message)}</div>`;
         } finally {
             submitBtn.disabled = false;
             submitBtn.textContent = mode === 'specific' ? 'Import Order(s)' : 'Run Quick Import';
