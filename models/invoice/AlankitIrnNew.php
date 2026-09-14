@@ -394,19 +394,56 @@ return base64_encode($encryptedData);
             return null;
         };
 
+        $sellerGstin = trim((string)($invoice['seller_gstin'] ?? ''));
+        $sellerStcd = '';
+        if (strlen($sellerGstin) >= 2 && ctype_digit(substr($sellerGstin, 0, 2)) && (int)substr($sellerGstin, 0, 2) > 0) {
+            $sellerStcd = sprintf('%02d', (int)substr($sellerGstin, 0, 2));
+        } else {
+            $sellerStcd = $formatStcd($invoice['seller_state_code'] ?? '', '07');
+        }
+
+        $buyerStcd = $formatStcd($invoice['buyer_state_code'] ?? '', $isExport ? '96' : '07');
+        $posStcd = $formatStcd($invoice['pos'] ?? $buyerStcd, $buyerStcd);
+        $shipStcd = $formatStcd($invoice['shipping_state_code'] ?? $invoice['shipping_state'] ?? '', $buyerStcd);
+
+        $isInterState = ($sellerStcd !== $posStcd) || $isExport;
+
         // Format line items
         $itemList = [];
+        $totalAssVal = 0.0;
+        $totalCgstVal = 0.0;
+        $totalSgstVal = 0.0;
+        $totalIgstVal = 0.0;
+
         if (!empty($invoice['line_items']) && is_array($invoice['line_items'])) {
             foreach ($invoice['line_items'] as $idx => $item) {
                 $qty = max(0.001, (float)($item['quantity'] ?? 0));
                 $unitPrice = round((float)($item['unit_price'] ?? 0), 2);
                 $totAmt = round($qty * $unitPrice, 2);
                 $taxRate = round((float)($item['tax_rate'] ?? 0), 2);
-                $igstAmt = round((float)($item['tax_amount'] ?? $item['igst'] ?? 0), 2);
-                $cgstAmt = round((float)($item['cgst'] ?? 0), 2);
-                $sgstAmt = round((float)($item['sgst'] ?? 0), 2);
+
+                $totTax = round((float)($item['tax_amount'] ?? (($item['igst'] ?? 0) + ($item['cgst'] ?? 0) + ($item['sgst'] ?? 0))), 2);
+                if ($totTax <= 0 && $taxRate > 0) {
+                    $totTax = round($totAmt * $taxRate / 100, 2);
+                }
+
+                if ($isInterState) {
+                    $igstAmt = $totTax;
+                    $cgstAmt = 0.00;
+                    $sgstAmt = 0.00;
+                } else {
+                    $igstAmt = 0.00;
+                    if (isset($item['cgst']) && isset($item['sgst']) && ((float)$item['cgst'] > 0 || (float)$item['sgst'] > 0)) {
+                        $cgstAmt = round((float)$item['cgst'], 2);
+                        $sgstAmt = round((float)$item['sgst'], 2);
+                    } else {
+                        $cgstAmt = round($totTax / 2, 2);
+                        $sgstAmt = round($totTax - $cgstAmt, 2);
+                    }
+                }
+
                 $calcTotItemVal = $totAmt + $igstAmt + $cgstAmt + $sgstAmt;
-                $totItemVal = isset($item['total']) ? round((float)$item['total'], 2) : round($calcTotItemVal, 2);
+                $totItemVal = isset($item['total']) && (float)$item['total'] > 0 ? round((float)$item['total'], 2) : round($calcTotItemVal, 2);
 
                 $hsnClean = preg_replace('/\D/', '', (string)($item['hsn'] ?? ''));
                 $hsnCd = strlen($hsnClean) >= 2 ? substr($hsnClean, 0, 8) : '9703';
@@ -427,19 +464,13 @@ return base64_encode($encryptedData);
                     'SgstAmt' => $sgstAmt,
                     'TotItemVal' => $totItemVal,
                 ];
+
+                $totalAssVal += $totAmt;
+                $totalCgstVal += $cgstAmt;
+                $totalSgstVal += $sgstAmt;
+                $totalIgstVal += $igstAmt;
             }
         }
-
-        $sellerGstin = trim((string)($invoice['seller_gstin'] ?? ''));
-        $sellerStcd = '';
-        if (strlen($sellerGstin) >= 2 && ctype_digit(substr($sellerGstin, 0, 2)) && (int)substr($sellerGstin, 0, 2) > 0) {
-            $sellerStcd = sprintf('%02d', (int)substr($sellerGstin, 0, 2));
-        } else {
-            $sellerStcd = $formatStcd($invoice['seller_state_code'] ?? '', '07');
-        }
-
-        $buyerStcd = $formatStcd($invoice['buyer_state_code'] ?? '', $isExport ? '96' : '07');
-        $shipStcd = $formatStcd($invoice['shipping_state_code'] ?? $invoice['shipping_state'] ?? '', $buyerStcd);
 
         $transId = strtoupper(trim((string)($invoice['trans_id'] ?? '')));
         $transName = trim((string)($invoice['trans_name'] ?? ''));
@@ -539,15 +570,15 @@ return base64_encode($encryptedData);
             ],
             'ItemList' => $itemList,
             'ValDtls' => [
-                'AssVal' => round((float)($invoice['subtotal'] ?? 0), 2),
-                'CgstVal' => round((float)($invoice['cgst_total'] ?? 0), 2),
-                'SgstVal' => round((float)($invoice['sgst_total'] ?? 0), 2),
-                'IgstVal' => round((float)($invoice['tax_amount'] ?? 0), 2),
+                'AssVal' => round((float)($invoice['subtotal'] ?? $totalAssVal), 2),
+                'CgstVal' => round($totalCgstVal, 2),
+                'SgstVal' => round($totalSgstVal, 2),
+                'IgstVal' => round($totalIgstVal, 2),
                 'CesVal' => 0,
                 'Discount' => round((float)($invoice['discount_amount'] ?? 0), 2),
                 'OthChrg' => 0,
                 'RndOffAmt' => 0,
-                'TotInvVal' => round((float)($invoice['total_amount'] ?? 0), 2)
+                'TotInvVal' => round((float)($invoice['total_amount'] ?? (($invoice['subtotal'] ?? $totalAssVal) + $totalCgstVal + $totalSgstVal + $totalIgstVal - ($invoice['discount_amount'] ?? 0))), 2)
             ],
             'PayDtls' => null,
             'RefDtls' => null,

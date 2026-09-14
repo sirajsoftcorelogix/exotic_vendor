@@ -520,6 +520,36 @@ class DomesticEwbIrnService {
      * @param array $ewbData Optional E-way bill data to include (veh_no, veh_type)
      */
     private function prepareIrnPayload($invoice, $items, $customer, $firm, $ewbData = []) {
+        $countryRaw = strtoupper(trim((string)($customer['country'] ?? 'IN')));
+        $isBusiness = ($countryRaw === '' || $countryRaw === 'IN' || $countryRaw === 'INDIA' || $countryRaw === 'IND');
+
+        $sellerGstin = trim((string)($alankitConfig['gstin'] ?? $firm['gst'] ?? '07AADCE1400C1ZJ'));
+        if ($sellerGstin === '') {
+            $sellerGstin = '07AADCE1400C1ZJ';
+        }
+        $sellerStateCode = '';
+        if (strlen($sellerGstin) >= 2 && ctype_digit(substr($sellerGstin, 0, 2)) && (int)substr($sellerGstin, 0, 2) > 0) {
+            $sellerStateCode = sprintf('%02d', (int)substr($sellerGstin, 0, 2));
+        } else {
+            $rawSt = (int)($firm['state_code'] ?? 7);
+            $sellerStateCode = sprintf('%02d', $rawSt > 0 ? $rawSt : 7);
+        }
+
+        $rawBuyerSt = trim((string)($customer['state_code'] ?? ''));
+        if ($isBusiness) {
+            if (is_numeric($rawBuyerSt) && (int)$rawBuyerSt > 0) {
+                $buyerStateCode = sprintf('%02d', (int)$rawBuyerSt);
+            } else if ($rawBuyerSt !== '') {
+                $buyerStateCode = sprintf('%02s', $rawBuyerSt);
+            } else {
+                $buyerStateCode = '07';
+            }
+        } else {
+            $buyerStateCode = '96';
+        }
+
+        $isInterState = ($sellerStateCode !== $buyerStateCode) || !$isBusiness;
+
         // Format line items
         $itemList = [];
         $totalAssVal  = 0.00;
@@ -534,32 +564,21 @@ class DomesticEwbIrnService {
             // Taxable amount
             $assAmt = round($qty * $unitPrice, 2);
 
-            /*
-            * Calculate GST from taxable amount.
-            *
-            * Example:
-            * 9693.70 × 3% = 290.811
-            */
             $totalTax = round($assAmt * $gstRate / 100, 2);
 
-            /*
-            * Intra-state:
-            * CGST = SGST
-            *
-            * Make sure the GST amount can be divided equally
-            * into two paisa amounts.
-            */
-            $halfTax = round($totalTax / 2, 2);
+            if ($isInterState) {
+                $igstAmt = $totalTax;
+                $cgstAmt = 0.00;
+                $sgstAmt = 0.00;
+            } else {
+                $halfTax = round($totalTax / 2, 2);
+                $cgstAmt = $halfTax;
+                $sgstAmt = round($totalTax - $halfTax, 2);
+                $igstAmt = 0.00;
+            }
 
-            $cgstAmt = $halfTax;
-            $sgstAmt = $halfTax;
-
-            /*
-            * Calculate item total from the values actually
-            * being sent to the e-invoice API.
-            */
             $totItemVal = round(
-                $assAmt + $cgstAmt + $sgstAmt,
+                $assAmt + $cgstAmt + $sgstAmt + $igstAmt,
                 2
             );
             $itemList[] = [
@@ -576,8 +595,7 @@ class DomesticEwbIrnService {
 
                 'GstRt'      => (int)$gstRate,
 
-                // Intra-state transaction
-                'IgstAmt'    => 0.00,
+                'IgstAmt'    => $igstAmt,
                 'CgstAmt'    => $cgstAmt,
                 'SgstAmt'    => $sgstAmt,
 
@@ -588,28 +606,7 @@ class DomesticEwbIrnService {
             $totalAssVal  += $assAmt;
             $totalCgstVal += $cgstAmt;
             $totalSgstVal += $sgstAmt;
-            /*
-            $itemList[] = [
-                'SlNo' => (string)($idx + 1),
-                'PrdDesc' => $item['item_name'] ?? '',
-                'IsServc' => 'N',
-                //'HsnCd' => strlen((string)($item['hsn'] ?? '')) === 6
-                //    ? substr((string)($item['hsn'] ?? ''), 0, 4)
-                //    : substr((string)($item['hsn'] ?? ''), 0, 8),
-                'HsnCd' => (string)($item['hsn'] ?? ''),
-                'Qty' => (float)($item['quantity'] ?? 0),
-                'Unit' => $item['unit'] ?? 'NOS',
-                'UnitPrice' => (float)($item['unit_price'] ?? 0),
-                'TotAmt' => (float)(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0)),
-                'AssAmt' => (float)(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0)),
-                'GstRt' => (int)($item['tax_rate'] ?? 0),
-                //'IgstAmt' => (float)($item['tax_amount'] ?? 0), 
-                'IgstAmt' => 0,               
-                'TotItemVal' => round((float)(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0) + ($item['tax_amount'] ?? 0)), 2),
-                'CgstAmt' => round((float)($item['tax_amount']/2 ?? 0), 2),
-                'SgstAmt' => round((float)($item['tax_amount']/2 ?? 0), 2)
-            ];
-            */
+            $totalIgstVal += $igstAmt;
         }
         $totalAssVal  = round($totalAssVal, 2);
         $totalCgstVal = round($totalCgstVal, 2);
