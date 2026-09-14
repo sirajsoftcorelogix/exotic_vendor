@@ -402,13 +402,14 @@ window.SINGLE_DISPATCH_PAYLOAD = <?php echo json_encode($single_order_payload ??
                             <div class="flex flex-wrap items-center gap-4 text-xs">
                                 <div class="flex items-center gap-1.5">
                                     <span class="font-semibold text-gray-700">Weight (kg):</span>
-                                    <input type="number" name="weight" value="${totalItemsWeight.toFixed(3)}" step="0.1" min="0.1"
+                                    <input type="number" name="weight" value="" step="0.1" min="0.1" placeholder="e.g. 0.5"
                                            class="weight-input border border-gray-300 rounded-md px-2 py-1 w-20 text-xs font-medium focus:ring-1 focus:ring-orange-500 outline-none"/>
                                 </div>
                                 <div class="flex items-center gap-1.5">
                                     <span class="font-semibold text-gray-700">Box Size:</span>
                                     <select class="BoxSize border border-gray-300 rounded-md px-2 py-1 text-xs w-36 focus:ring-1 focus:ring-orange-500 outline-none bg-white">
-                                        <option value="R-1" data-length="22" data-width="17" data-height="5" selected>R-1 (22x17x5 in)</option>
+                                        <option value="" selected disabled>Select Box Size</option>
+                                        <option value="R-1" data-length="22" data-width="17" data-height="5">R-1 (22x17x5 in)</option>
                                         <option value="R-2" data-length="16" data-width="13" data-height="13">R-2 (16x13x13 in)</option>
                                         <option value="R-3" data-length="16" data-width="11" data-height="7">R-3 (16x11x7 in)</option>
                                         <option value="R-4" data-length="13" data-width="10" data-height="7">R-4 (13x10x7 in)</option>
@@ -569,10 +570,21 @@ window.SINGLE_DISPATCH_PAYLOAD = <?php echo json_encode($single_order_payload ??
         if (!courierContainer) return;
 
         const orderNumber = payload.order_number;
-        const weight = parseFloat(boxElement.querySelector('.weight-input')?.value) || 0.5;
-        const pickupLocation = boxElement.querySelector('.pickup-location-select')?.value || 'Head Off';
-
+        const weightInputVal = boxElement.querySelector('.weight-input')?.value;
+        const weight = parseFloat(weightInputVal);
         const sizeSelect = boxElement.querySelector('.BoxSize');
+
+        if (!sizeSelect || !sizeSelect.value || isNaN(weight) || weight <= 0) {
+            courierContainer.innerHTML = `
+                <div class="text-xs text-gray-500 flex items-center justify-center p-4">
+                    Please enter Weight and select Box Size, then click "Calculate Courier Rates".
+                </div>
+            `;
+            checkCouriersSelected();
+            return;
+        }
+
+        const pickupLocation = boxElement.querySelector('.pickup-location-select')?.value || 'Head Off';
         let length = 22, width = 17, height = 5;
 
         if (sizeSelect && sizeSelect.value === 'CUSTOM') {
@@ -810,10 +822,20 @@ window.SINGLE_DISPATCH_PAYLOAD = <?php echo json_encode($single_order_payload ??
             const boxes = container.querySelectorAll('.bulk-dispatch-box');
             const boxPayloads = [];
 
+            let hasValidationError = false;
             boxes.forEach((boxEl, idx) => {
+                if (hasValidationError) return;
                 const bNo = idx + 1;
-                const weight = parseFloat(boxEl.querySelector('.weight-input')?.value) || 0.5;
+                const weightInputVal = boxEl.querySelector('.weight-input')?.value;
+                const weight = parseFloat(weightInputVal);
                 const sizeSelect = boxEl.querySelector('.BoxSize');
+
+                if (!sizeSelect || !sizeSelect.value || isNaN(weight) || weight <= 0) {
+                    showPosModalMessage('Validation Required', `Please enter a valid weight and select a box size for Box ${bNo}.`, 'warning');
+                    hasValidationError = true;
+                    return;
+                }
+
                 let length = 22, width = 17, height = 5;
 
                 if (sizeSelect && sizeSelect.value === 'CUSTOM') {
@@ -854,6 +876,8 @@ window.SINGLE_DISPATCH_PAYLOAD = <?php echo json_encode($single_order_payload ??
                     pickup_location: pickupLocation
                 });
             });
+
+            if (hasValidationError) return;
 
             submitBtn.disabled = true;
             submitBtn.innerHTML = `<span>⌛</span> <span>Processing Dispatch...</span>`;
