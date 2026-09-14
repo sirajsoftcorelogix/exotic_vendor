@@ -112,17 +112,9 @@ function invoice_resolve_irn_details(array $invoice, ?mysqli $conn = null): arra
                 'black',
                 [0, 0, 0, 0]
             );
-            if (function_exists('imagecreate')) {
-                $png = $bobj->getPngData(false);
-                if ($png !== '') {
-                    $qrDataUri = 'data:image/png;base64,' . base64_encode($png);
-                }
-            }
-            if ($qrDataUri === '') {
-                $svg = $bobj->getSvgCode();
-                if ($svg !== '') {
-                    $qrDataUri = 'data:image/svg+xml;base64,' . base64_encode($svg);
-                }
+            $svg = $bobj->getSvgCode();
+            if ($svg !== '') {
+                $qrDataUri = 'data:image/svg+xml;base64,' . base64_encode($svg);
             }
         } catch (Throwable $e) {
             error_log('invoice_resolve_irn_details QR generation error: ' . $e->getMessage());
