@@ -232,44 +232,23 @@ class DomesticEwbIrnService {
                 $isDupIrn = (strtoupper(trim((string)$irnResponse['InfoDtls'][0]['InfCd'])) === 'DUPIRN');
             }
             
-            // For DUPIRN response, preserve existing IRN/EWB fields and update InfoDtls/Ack fields.
+            // For DUPIRN response, preserve existing IRN/EWB fields and only store InfoDtls.
             if ($isDupIrn) {
-                $desc = $irnResponse['InfoDtls'][0]['Desc'] ?? null;
-                if (is_string($desc)) {
-                    $decodedDesc = json_decode($desc, true);
-                    if (is_array($decodedDesc)) {
-                        $desc = $decodedDesc;
-                    }
-                }
-
-                $irn = is_array($desc) ? ($desc['Irn'] ?? $desc['irn'] ?? null) : null;
-                $ackNo = is_array($desc) ? ($desc['AckNo'] ?? $desc['ack_no'] ?? $desc['ack_number'] ?? null) : null;
-                $ackDt = is_array($desc) ? ($desc['AckDt'] ?? $desc['ack_dt'] ?? $desc['ack_date'] ?? null) : null;
-
-                if (empty($irn) && !empty($irnResponse['Irn'])) {
-                    $irn = $irnResponse['Irn'];
-                }
-                if (empty($ackNo) && !empty($irnResponse['AckNo'])) {
-                    $ackNo = $irnResponse['AckNo'];
-                }
-                if (empty($ackDt) && !empty($irnResponse['AckDt'])) {
-                    $ackDt = $irnResponse['AckDt'];
-                }
-
+                //echo "Duplicate IRN detected for invoice #$invoiceId. Preserving existing IRN/EWB fields and updating InfoDtls.\n";
+                $irn = $irnResponse['InfoDtls'][0]['Desc']['Irn'] ?? null;
                 $this->updateInfoDtlsOnly($invoiceId, $infoDtls);
-
+                //update irn if available in response
                 if (!empty($irn)) {
                     $this->updateIrnStatus($invoiceId, 'generated', null, $irnPayload, $irnResponse, $irn);
-                    $this->syncInvoiceTable($invoiceId, $irn, null, $ackNo ? (string)$ackNo : null, $ackDt ? (string)$ackDt : null);
-                    $result['status'] = true;
-                    $result['irn'] = $irn;
-                    $result['irn_message'] = 'IRN already generated (Duplicate IRN retrieved successfully).';
-                    return $result;
+                    $this->syncInvoiceTable($invoiceId, $irn, null, $irnResponse['InfoDtls'][0]['Desc']['AckNo'] ?? null, $irnResponse['InfoDtls'][0]['Desc']['AckDt'] ?? null);
                 }
 
                 $dupMessage = $this->resolveIrnErrorDetails($irnResponse);
                 if ($dupMessage === '') {
-                    $dupMessage = is_string($desc) ? $desc : 'Duplicate IRN (DUPIRN)';
+                    $dupMessage = trim((string)($irnResponse['InfoDtls'][0]['Desc'] ?? 'Duplicate IRN (DUPIRN)'));
+                }
+                if ($dupMessage === '') {
+                    $dupMessage = 'Duplicate IRN (DUPIRN)';
                 }
 
                 $result['status'] = false;
@@ -296,16 +275,13 @@ class DomesticEwbIrnService {
                 return $result;
             }
             
-            if($irnResponse && (isset($irnResponse['Irn']) || (isset($irnResponse['Status']) && $irnResponse['Status'] === 'ACT'))) {
+            if($irnResponse && isset($irnResponse['Status']) && $irnResponse['Status'] === 'ACT') {
                 $irn = $irnResponse['Irn'];
-                $ackNo = $irnResponse['AckNo'] ?? $irnResponse['ack_no'] ?? $irnResponse['ack_number'] ?? null;
-                $ackDt = $irnResponse['AckDt'] ?? $irnResponse['ack_dt'] ?? $irnResponse['ack_date'] ?? null;
-
                 $result['irn'] = $irn;
                 $result['irn_message'] = 'IRN generated successfully';                
                 // Update IRN status in database
                 $this->updateIrnStatus($invoiceId, 'generated', null, $irnPayload, $irnResponse, $irn);
-                $this->syncInvoiceTable($invoiceId, $irn, isset($irnResponse['EwbNo']) ? (string)$irnResponse['EwbNo'] : null, $ackNo ? (string)$ackNo : null, $ackDt ? (string)$ackDt : null);
+                $this->syncInvoiceTable($invoiceId, $irn, isset($irnResponse['EwbNo']) ? (string)$irnResponse['EwbNo'] : null, $irnResponse['AckNo'] ?? null, $irnResponse['AckDt'] ?? null);
 
                 $ewbNo = isset($irnResponse['EwbNo']) ? (string)$irnResponse['EwbNo'] : null;
                 $genGstin = isset($irnResponse['GenGstin']) ? (string)$irnResponse['GenGstin'] : null;
