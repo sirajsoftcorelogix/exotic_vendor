@@ -243,7 +243,16 @@ class PosInvoiceController
                  LIMIT 1'
             );
         } else {
-            $stmt = $conn->prepare('SELECT * FROM vp_domestic_ewb_irn WHERE vp_invoices_id = ? LIMIT 1');
+            $stmt = $conn->prepare(
+                'SELECT d.*,
+                        COALESCE(d.irn, i.irn) AS irn,
+                        i.ack_number,
+                        i.ack_date
+                 FROM vp_invoices i
+                 LEFT JOIN vp_domestic_ewb_irn d ON d.vp_invoices_id = i.id
+                 WHERE i.id = ?
+                 LIMIT 1'
+            );
         }
         if (!$stmt) {
             return null;

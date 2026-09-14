@@ -75,8 +75,7 @@ function is_login()
 function base_url($path = '')
 {
 	global $domain;
-	return $domain . '/' . ltrim($path, '/');
-	//return 'http://localhost:8082/' . ltrim($path, '/');
+	return rtrim($domain ?? '', '/') . '/' . ltrim($path, '/');
 }
 
 require_once __DIR__ . '/currency_display.php';

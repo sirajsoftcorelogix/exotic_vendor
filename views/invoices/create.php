@@ -239,6 +239,7 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
                     </div>
                 </div>
             </div>
+        <?php } ?>
         <!-- Transporter & Vehicle Information -->
         <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0px_10px_15px_-3px_#0000001A] md:p-6" id="transportSelectionSection">
             <h2 class="mb-1 text-base font-semibold text-slate-800">Transporter &amp; vehicle</h2>
@@ -307,7 +308,6 @@ $invLabelClass = 'block text-xs font-semibold uppercase tracking-wide text-gray-
             </div>
         </div>
 
-        <?php } ?>
         <?php
                 // Helper function to format single-line address
                 if (!function_exists('formatAddress')) {
