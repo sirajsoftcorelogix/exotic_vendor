@@ -3623,17 +3623,17 @@ class PosInvoiceController
             $qrBlockHtml = '';
 
             if (!empty($irnDetails['qr_svg'])) {
-                $qrBlockHtml = '<div style="width: 110px; height: 110px; display: inline-block; vertical-align: top; border: 1px solid #ccc; padding: 2px; background: #fff;">'
+                $qrBlockHtml = '<div style="width: 220px; height: 220px; display: inline-block; vertical-align: top; border: 1px solid #ccc; padding: 2px; background: #fff;">'
                     . $irnDetails['qr_svg']
                     . '</div>';
             } elseif (!empty($irnDetails['qr_data_uri'])) {
-                $qrBlockHtml = '<img src="' . htmlspecialchars($irnDetails['qr_data_uri']) . '" alt="E-Invoice QR Code" style="width: 110px; height: 110px; display: inline-block; vertical-align: top; border: 1px solid #ccc; padding: 2px;" />';
+                $qrBlockHtml = '<img src="' . htmlspecialchars($irnDetails['qr_data_uri']) . '" alt="E-Invoice QR Code" style="width: 220px; height: 220px; display: inline-block; vertical-align: top; border: 1px solid #ccc; padding: 2px;" />';
             } elseif (!empty($irnDetails['qr_api_url'])) {
-                $qrBlockHtml = '<img src="' . htmlspecialchars($irnDetails['qr_api_url']) . '" alt="E-Invoice QR Code" style="width: 110px; height: 110px; display: inline-block; vertical-align: top; border: 1px solid #ccc; padding: 2px;" />';
+                $qrBlockHtml = '<img src="' . htmlspecialchars($irnDetails['qr_api_url']) . '" alt="E-Invoice QR Code" style="width: 220px; height: 220px; display: inline-block; vertical-align: top; border: 1px solid #ccc; padding: 2px;" />';
             }
 
             if ($qrBlockHtml === '' && $textToEncode !== '') {
-                $qrBlockHtml = '<barcode code="' . htmlspecialchars($textToEncode) . '" type="QR" size="1.1" error="M" />';
+                $qrBlockHtml = '<barcode code="' . htmlspecialchars($textToEncode) . '" type="QR" size="2.2" error="M" />';
             }
 
             $headerRightBlock = '
