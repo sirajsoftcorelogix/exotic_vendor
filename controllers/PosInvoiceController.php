@@ -3619,17 +3619,30 @@ class PosInvoiceController
 
         $headerRightBlock = '';
         if ($hasIrn) {
+            $textToEncode = !empty($irnDetails['qrcode_string']) ? $irnDetails['qrcode_string'] : $irnDetails['irn'];
             $qrBlockHtml = '';
-            if (!empty($irnDetails['qr_data_uri'])) {
-                $qrBlockHtml = '<img src="' . htmlspecialchars($irnDetails['qr_data_uri']) . '" alt="E-Invoice QR Code" style="width: 120px; height: 120px; display: inline-block; vertical-align: top; border: 1px solid #ddd; padding: 2px;" />';
+
+            if (!empty($irnDetails['qr_svg'])) {
+                $qrBlockHtml = '<div style="width: 110px; height: 110px; display: inline-block; vertical-align: top; border: 1px solid #ccc; padding: 2px; background: #fff;">'
+                    . $irnDetails['qr_svg']
+                    . '</div>';
+            } elseif (!empty($irnDetails['qr_data_uri'])) {
+                $qrBlockHtml = '<img src="' . htmlspecialchars($irnDetails['qr_data_uri']) . '" alt="E-Invoice QR Code" style="width: 110px; height: 110px; display: inline-block; vertical-align: top; border: 1px solid #ccc; padding: 2px;" />';
+            } elseif (!empty($irnDetails['qr_api_url'])) {
+                $qrBlockHtml = '<img src="' . htmlspecialchars($irnDetails['qr_api_url']) . '" alt="E-Invoice QR Code" style="width: 110px; height: 110px; display: inline-block; vertical-align: top; border: 1px solid #ccc; padding: 2px;" />';
             }
+
+            if ($qrBlockHtml === '' && $textToEncode !== '') {
+                $qrBlockHtml = '<barcode code="' . htmlspecialchars($textToEncode) . '" type="QR" size="1.1" error="M" />';
+            }
+
             $headerRightBlock = '
             <table style="width: 100%; border-collapse: collapse;">
                 <tr>
-                    <td style="width: 50%; vertical-align: top; text-align: center; padding-right: 10px;">
+                    <td style="width: 45%; vertical-align: top; text-align: center; padding-right: 6px;">
                         ' . $qrBlockHtml . '
                     </td>
-                    <td style="width: 50%; vertical-align: top; text-align: right;">
+                    <td style="width: 55%; vertical-align: top; text-align: right;">
                         <div class="invoice-title" style="font-size: 22px;">TAX INVOICE</div>
                         <div class="subtitle" style="font-size: 13px;">ORIGINAL FOR RECIPIENT</div>
                         <div class="subtitle" style="font-size: 13px; margin-top: 4px;">Date: ' . date('d M Y', strtotime($invoice['invoice_date'])) . '</div>
