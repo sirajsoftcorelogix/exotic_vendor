@@ -16,12 +16,7 @@ $_SESSION['tenant_id'] = 1;
 $_SESSION['tenant_Name'] = 'Exotic India Art';
 
 
-$isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-    || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
-    || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
-$protocol = $isHttps ? 'https://' : 'http://';
-$host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
-$domain = $protocol . $host;
+$domain = "https://" . $_SERVER['SERVER_NAME'];
 $root_path = $_SERVER['DOCUMENT_ROOT'];
 define('EXPECTED_SECRET_KEY', 'b2d1127032446b78ce2b8911b72f6b155636f6898af2cf5d3aafdccf46778801');
 
@@ -44,3 +39,5 @@ require_once 'helpers/html_helpers.php';
 //require_once 'helpers/menu_helpers.php'; // ← we'll move menu functions here
 
 // Optionally include more common setup like error reporting, timezone, etc.
+$domain = "http://" . $_SERVER['SERVER_NAME'] . ':8080/';
+$root_path = $_SERVER['DOCUMENT_ROOT'];
