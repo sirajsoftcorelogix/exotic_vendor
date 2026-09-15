@@ -357,21 +357,34 @@ class PurchaseOrder {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
             foreach ($poData['items'] as $it) {
+                $orderNumber = (!empty($it['order_number']) && is_numeric($it['order_number'])) ? (int)$it['order_number'] : 0;
+                $gstVal = (int)($it['gst'] ?? 0);
+                $qtyVal = (float)($it['quantity'] ?? 0);
+                $priceVal = (float)($it['price'] ?? 0);
+                $amountVal = (float)($it['amount'] ?? 0);
+                $titleVal = (string)($it['title'] ?? '');
+                $imageVal = (string)($it['image'] ?? '');
+                $hsnVal = (string)($it['hsn'] ?? '');
+                $itemCodeVal = (string)($it['item_code'] ?? '');
+                $sizeVal = (string)($it['size'] ?? '');
+                $colorVal = (string)($it['color'] ?? '');
+                $skuVal = (string)($it['sku'] ?? '');
+
                 $insItemStmt->bind_param(
-                    "issssddddssss",
+                    "iisssidddssss",
                     $poId,
-                    $it['order_number'],
-                    $it['title'],
-                    $it['image'],
-                    $it['hsn'],
-                    $it['gst'],
-                    $it['quantity'],
-                    $it['price'],
-                    $it['amount'],
-                    $it['item_code'],
-                    $it['size'],
-                    $it['color'],
-                    $it['sku']
+                    $orderNumber,
+                    $titleVal,
+                    $imageVal,
+                    $hsnVal,
+                    $gstVal,
+                    $qtyVal,
+                    $priceVal,
+                    $amountVal,
+                    $itemCodeVal,
+                    $sizeVal,
+                    $colorVal,
+                    $skuVal
                 );
 
                 if ($insItemStmt->execute()) {
