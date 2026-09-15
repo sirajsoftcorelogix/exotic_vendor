@@ -2354,4 +2354,424 @@ class InvoicesController
             exit('Error: ' . $e->getMessage());
         }
     }
+
+    /**
+     * AJAX endpoint to initiate a background bulk invoice batch job across multiple customers.
+     */
+    public function create_bulk_background(): void
+    {
+        is_login();
+        global $conn, $ordersModel;
+
+        ob_start();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (!canSrEmpAccess()) {
+            ob_clean();
+            echo json_encode(['success' => false, 'message' => 'Access denied. Administrator or Sr Emp access required.']);
+            exit;
+        }
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        $itemIds = is_array($input['item_ids'] ?? null) ? array_map('intval', $input['item_ids']) : [];
+
+        if (empty($itemIds)) {
+            $rawItemIds = $_POST['poitem'] ?? $_GET['poitem'] ?? null;
+            if (is_array($rawItemIds)) {
+                $itemIds = array_map('intval', $rawItemIds);
+            } elseif (is_string($rawItemIds)) {
+                $itemIds = array_map('intval', explode(',', $rawItemIds));
+            }
+        }
+
+        $itemIds = array_values(array_filter(array_unique($itemIds), fn($id) => $id > 0));
+
+        if (empty($itemIds)) {
+            ob_clean();
+            echo json_encode(['success' => false, 'message' => 'No order items selected for bulk invoicing.']);
+            exit;
+        }
+
+        require_once __DIR__ . '/../models/invoice/BulkInvoiceBatch.php';
+        $bulkBatchModel = new BulkInvoiceBatch($conn);
+
+        // Fetch selected order lines
+        $orderLines = $ordersModel->getOrdersByIds($itemIds);
+        if (empty($orderLines)) {
+            ob_clean();
+            echo json_encode(['success' => false, 'message' => 'Selected order items were not found.']);
+            exit;
+        }
+
+        // Group items by customer_id
+        $customerGroups = [];
+        $totalOrdersSet = [];
+        $totalItemsCount = 0;
+
+        foreach ($orderLines as $row) {
+            // Check for existing active non-cancelled invoice
+            $invId = (int)($row['invoice_id'] ?? 0);
+            $invStat = strtolower(trim((string)($row['invoice_status'] ?? '')));
+            if ($invId > 0 && $invStat !== 'cancelled') {
+                continue; // Skip items already invoiced
+            }
+
+            $customerId = (int)($row['customer_id'] ?? 0);
+            if ($customerId <= 0) continue;
+
+            $custName = trim((string)($row['customer_name'] ?? ($row['name'] ?? ('Customer #' . $customerId))));
+            if (empty($custName)) {
+                $custName = 'Customer #' . $customerId;
+            }
+
+            if (!isset($customerGroups[$customerId])) {
+                $customerGroups[$customerId] = [
+                    'name' => $custName,
+                    'item_ids' => [],
+                    'order_numbers' => [],
+                ];
+            }
+
+            $customerGroups[$customerId]['item_ids'][] = (int)$row['id'];
+            $orderNo = trim((string)($row['order_number'] ?? ''));
+            if ($orderNo !== '') {
+                $customerGroups[$customerId]['order_numbers'][] = $orderNo;
+                $totalOrdersSet[$orderNo] = true;
+            }
+            $totalItemsCount++;
+        }
+
+        if (empty($customerGroups)) {
+            ob_clean();
+            echo json_encode(['success' => false, 'message' => 'All selected order items already have active invoices or invalid customer data.']);
+            exit;
+        }
+
+        try {
+            $batchNo = 'INV-BATCH-' . date('YmdHis') . '-' . mt_rand(1000, 9999);
+            $batchId = $bulkBatchModel->createBatch([
+                'batch_no' => $batchNo,
+                'total_customers' => count($customerGroups),
+                'total_orders' => count($totalOrdersSet),
+                'total_items' => $totalItemsCount,
+                'created_by' => (int)($_SESSION['user']['id'] ?? 0),
+            ], $customerGroups);
+
+            // Trigger non-blocking background queue runner script if exec/shell is available
+            $scriptPath = __DIR__ . '/../scripts/process_bulk_invoice_queue.php';
+            if (function_exists('exec') && file_exists($scriptPath)) {
+                if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                    pclose(popen("start /B php \"" . addslashes($scriptPath) . "\" --batch-id=" . $batchId . " > NUL 2>&1", "r"));
+                } else {
+                    exec("php \"" . addslashes($scriptPath) . "\" --batch-id=" . $batchId . " > /dev/null 2>&1 &");
+                }
+            }
+
+            ob_clean();
+            echo json_encode([
+                'success' => true,
+                'batch_id' => $batchId,
+                'batch_no' => $batchNo,
+                'total_customers' => count($customerGroups),
+                'total_orders' => count($totalOrdersSet),
+                'total_items' => $totalItemsCount,
+                'report_url' => base_url('?page=invoices&action=batch_report&batch_id=' . $batchId),
+            ]);
+            exit;
+        } catch (Throwable $e) {
+            ob_clean();
+            echo json_encode(['success' => false, 'message' => 'Failed to create bulk invoice batch: ' . $e->getMessage()]);
+            exit;
+        }
+    }
+
+    /**
+     * Render Bulk Invoice Batch Summary Report
+     */
+    public function batch_report(): void
+    {
+        is_login();
+        global $conn;
+
+        $batchId = (int)($_GET['batch_id'] ?? 0);
+        $batchNo = trim((string)($_GET['batch_no'] ?? ''));
+
+        require_once __DIR__ . '/../models/invoice/BulkInvoiceBatch.php';
+        $bulkBatchModel = new BulkInvoiceBatch($conn);
+
+        $batch = null;
+        if ($batchId > 0) {
+            $batch = $bulkBatchModel->getBatchById($batchId);
+        } elseif ($batchNo !== '') {
+            $batch = $bulkBatchModel->getBatchByNo($batchNo);
+        }
+
+        if (!$batch) {
+            header('Location: ' . base_url('?page=orders&action=list'));
+            exit;
+        }
+
+        $items = $bulkBatchModel->getBatchItems((int)$batch['id']);
+        renderTemplate('views/invoices/batch_report.php', [
+            'batch' => $batch,
+            'items' => $items,
+        ]);
+    }
+
+    /**
+     * AJAX endpoint for real-time progress polling of a bulk batch.
+     */
+    public function batch_status_ajax(): void
+    {
+        is_login();
+        global $conn;
+
+        header('Content-Type: application/json; charset=utf-8');
+        $batchId = (int)($_GET['batch_id'] ?? $_POST['batch_id'] ?? 0);
+
+        if ($batchId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid batch ID']);
+            exit;
+        }
+
+        require_once __DIR__ . '/../models/invoice/BulkInvoiceBatch.php';
+        $bulkBatchModel = new BulkInvoiceBatch($conn);
+
+        $bulkBatchModel->updateBatchTotals($batchId);
+        $batch = $bulkBatchModel->getBatchById($batchId);
+        $items = $bulkBatchModel->getBatchItems($batchId);
+
+        if (!$batch) {
+            echo json_encode(['success' => false, 'message' => 'Batch not found']);
+            exit;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'batch' => $batch,
+            'items' => $items,
+        ]);
+        exit;
+    }
+
+    /**
+     * Chunk processing runner for browser-driven execution fallback.
+     */
+    public function process_batch_chunk(): void
+    {
+        is_login();
+        global $conn;
+
+        header('Content-Type: application/json; charset=utf-8');
+        $batchId = (int)($_GET['batch_id'] ?? $_POST['batch_id'] ?? 0);
+
+        require_once __DIR__ . '/../models/invoice/BulkInvoiceBatch.php';
+        $bulkBatchModel = new BulkInvoiceBatch($conn);
+
+        $item = $bulkBatchModel->lockNextPendingItem($batchId);
+        if (!$item) {
+            $batch = $bulkBatchModel->getBatchById($batchId);
+            echo json_encode([
+                'success' => true,
+                'completed' => true,
+                'message' => 'No more pending items in queue.',
+                'batch' => $batch,
+            ]);
+            exit;
+        }
+
+        // Process this 1 item inline
+        require_once __DIR__ . '/../scripts/process_bulk_invoice_queue.php';
+        exit;
+    }
+
+    /**
+     * Download all generated invoice PDFs for a batch as a ZIP archive.
+     */
+    public function download_batch_zip(): void
+    {
+        is_login();
+        global $conn;
+
+        $batchId = (int)($_GET['batch_id'] ?? 0);
+        require_once __DIR__ . '/../models/invoice/BulkInvoiceBatch.php';
+        $bulkBatchModel = new BulkInvoiceBatch($conn);
+
+        $batch = $bulkBatchModel->getBatchById($batchId);
+        if (!$batch) {
+            http_response_code(404);
+            exit('Batch not found');
+        }
+
+        $items = $bulkBatchModel->getBatchItems($batchId);
+        $invoiceIds = [];
+        foreach ($items as $item) {
+            $invId = (int)($item['invoice_id'] ?? 0);
+            if ($invId > 0 && $item['status'] === 'completed') {
+                $invoiceIds[] = $invId;
+            }
+        }
+
+        if (empty($invoiceIds)) {
+            http_response_code(404);
+            exit('No completed invoices found for this batch');
+        }
+
+        // Generate combined ZIP of PDF files
+        $tempDir = sys_get_temp_dir() . '/batch_pdf_' . uniqid();
+        if (!mkdir($tempDir, 0755, true)) {
+            http_response_code(500);
+            exit('Failed to create temporary directory');
+        }
+
+        $pdfFiles = [];
+        require_once __DIR__ . '/../models/invoice/invoice.php';
+        require_once __DIR__ . '/../models/comman/comman.php';
+        $invoiceModel = new Invoice($conn);
+        $commanModel = new Comman($conn);
+
+        foreach ($invoiceIds as $invId) {
+            $invoice = $invoiceModel->getInvoiceById($invId);
+            if (!$invoice) continue;
+
+            $invNo = preg_replace('/[\/\\:*?"<>|]/', '_', (string)($invoice['invoice_number'] ?: ('invoice_' . $invId)));
+            $pdfPath = $tempDir . '/' . $invNo . '.pdf';
+
+            // Use Dompdf or helper if available, or generate standard HTML/PDF
+            // Render invoice PDF content
+            ob_start();
+            $invoice_id = $invId;
+            $_GET['invoice_id'] = $invId;
+            // Let's generate HTML PDF buffer
+            require __DIR__ . '/../helpers/invoice/invoice_irn_pdf.php';
+            $htmlContent = ob_get_clean();
+
+            if (class_exists('\Dompdf\Dompdf')) {
+                $dompdf = new \Dompdf\Dompdf();
+                $dompdf->loadHtml($htmlContent);
+                $dompdf->setPaper('A4', 'portrait');
+                $dompdf->render();
+                file_put_contents($pdfPath, $dompdf->output());
+                $pdfFiles[] = ['path' => $pdfPath, 'name' => basename($pdfPath)];
+            }
+        }
+
+        if (empty($pdfFiles)) {
+            @rmdir($tempDir);
+            http_response_code(500);
+            exit('No PDFs could be generated');
+        }
+
+        $zipFile = $tempDir . '/batch_invoices_' . ($batch['batch_no'] ?? $batchId) . '.zip';
+        $zip = new \ZipArchive();
+        if ($zip->open($zipFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            http_response_code(500);
+            exit('Failed to create ZIP archive');
+        }
+
+        foreach ($pdfFiles as $f) {
+            $zip->addFile($f['path'], $f['name']);
+        }
+        $zip->close();
+
+        header('Content-Type: application/zip');
+        header('Content-Disposition: attachment; filename="invoices_' . ($batch['batch_no'] ?? $batchId) . '.zip"');
+        header('Content-Length: ' . filesize($zipFile));
+        readfile($zipFile);
+
+        foreach ($pdfFiles as $f) { @unlink($f['path']); }
+        @unlink($zipFile);
+        @rmdir($tempDir);
+        exit;
+    }
+
+    /**
+     * Export batch results summary as a CSV file.
+     */
+    public function export_batch_csv(): void
+    {
+        is_login();
+        global $conn;
+
+        $batchId = (int)($_GET['batch_id'] ?? 0);
+        require_once __DIR__ . '/../models/invoice/BulkInvoiceBatch.php';
+        $bulkBatchModel = new BulkInvoiceBatch($conn);
+
+        $batch = $bulkBatchModel->getBatchById($batchId);
+        if (!$batch) {
+            http_response_code(404);
+            exit('Batch not found');
+        }
+
+        $items = $bulkBatchModel->getBatchItems($batchId);
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="batch_report_' . ($batch['batch_no'] ?? $batchId) . '.csv"');
+
+        $out = fopen('php://output', 'w');
+        fputcsv($out, ['Batch No', 'Customer ID', 'Customer Name', 'Orders', 'Status', 'Invoice No', 'Amount', 'Error Message', 'Processed At']);
+
+        foreach ($items as $row) {
+            $orderNos = json_decode((string)($row['order_numbers'] ?? '[]'), true);
+            $orderNoStr = is_array($orderNos) ? implode(', ', $orderNos) : '';
+
+            fputcsv($out, [
+                $batch['batch_no'],
+                $row['customer_id'],
+                $row['customer_name'],
+                $orderNoStr,
+                strtoupper($row['status']),
+                $row['invoice_number'] ?: '-',
+                number_format((float)$row['invoice_amount'], 2, '.', ''),
+                $row['error_message'] ?: '',
+                $row['processed_at'] ?: '',
+            ]);
+        }
+
+        fclose($out);
+        exit;
+    }
+
+    /**
+     * Retry failed items in a batch.
+     */
+    public function retry_failed_batch_items(): void
+    {
+        is_login();
+        global $conn;
+
+        header('Content-Type: application/json; charset=utf-8');
+        $batchId = (int)($_GET['batch_id'] ?? $_POST['batch_id'] ?? 0);
+
+        require_once __DIR__ . '/../models/invoice/BulkInvoiceBatch.php';
+        $bulkBatchModel = new BulkInvoiceBatch($conn);
+
+        $items = $bulkBatchModel->getBatchItems($batchId);
+        $resetCount = 0;
+        foreach ($items as $item) {
+            if ($item['status'] === 'failed') {
+                if ($bulkBatchModel->resetFailedItem((int)$item['id'])) {
+                    $resetCount++;
+                }
+            }
+        }
+
+        // Trigger queue worker to process retried items
+        $scriptPath = __DIR__ . '/../scripts/process_bulk_invoice_queue.php';
+        if (function_exists('exec') && file_exists($scriptPath)) {
+            if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                pclose(popen("start /B php \"" . addslashes($scriptPath) . "\" --batch-id=" . $batchId . " > NUL 2>&1", "r"));
+            } else {
+                exec("php \"" . addslashes($scriptPath) . "\" --batch-id=" . $batchId . " > /dev/null 2>&1 &");
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'reset_count' => $resetCount,
+            'message' => "Re-queued {$resetCount} failed items for processing.",
+        ]);
+        exit;
+    }
 }
+

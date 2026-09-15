@@ -4019,9 +4019,8 @@ document.getElementById('action-add-to-invoice').addEventListener('click', funct
         return;
     }
     
-    // Validate customer_id and ready_for_dispatch status for all selected orders
     let validationPromise = Promise.resolve();
-    let customerId = null;
+    const customerIds = new Set();
     const visibleOrderIds = [];
     const hiddenOrderIds = [];
     
@@ -4035,29 +4034,13 @@ document.getElementById('action-add-to-invoice').addEventListener('click', funct
         }
     }
     
-    // First, validate visible orders
+    // Validate visible orders
     for (const id of visibleOrderIds) {
         const element = document.querySelector('#order-id-' + id);
         const orderData = JSON.parse(element.getAttribute('data-order'));
 
-        /*
-        // Status Gate: Only ready_for_dispatch items allowed
-        const st = (orderData.status || '').toString().toLowerCase().trim();
-        if (st !== 'ready_for_dispatch') {
-            showOrderNotice(
-                'Ready for Dispatch Required',
-                'Only items with status "Ready for Dispatch" can be added to an invoice or dispatched. Item #' + (orderData.item_code || id) + ' (Order #' + (orderData.order_number || '') + ') has status "' + (orderData.status || 'unknown') + '".',
-                'warning'
-            );
-            return;
-        }
-        */
-
-        if (customerId === null) {
-            customerId = orderData.customer_id;
-        } else if (customerId !== orderData.customer_id) {
-            showOrderNotice('Customer Mismatch', 'Selected orders belong to different customers. Please select orders for the same customer to create an invoice.', 'error');
-            return;
+        if (orderData.customer_id) {
+            customerIds.add(orderData.customer_id);
         }
 
         if (orderHasBlockingInvoice(orderData)) {
@@ -4066,7 +4049,7 @@ document.getElementById('action-add-to-invoice').addEventListener('click', funct
         }
     }
     
-    // If there are hidden orders, fetch their data via AJAX
+    // Fetch hidden orders data if any
     if (hiddenOrderIds.length > 0) {
         validationPromise = fetch('index.php?page=orders&action=get_orders_customer_id', {
             method: 'POST',
@@ -4079,16 +4062,8 @@ document.getElementById('action-add-to-invoice').addEventListener('click', funct
         .then(data => {
             if (data.success && data.orders) {
                 for (const orderData of data.orders) {
-                    /*
-                    const st = (orderData.status || '').toString().toLowerCase().trim();
-                    if (st !== 'ready_for_dispatch') {
-                        throw new Error('not_ready_for_dispatch:' + (orderData.order_number || orderData.order_id));
-                    }
-                    */
-                    if (customerId === null) {
-                        customerId = orderData.customer_id;
-                    } else if (customerId !== orderData.customer_id) {
-                        throw new Error('Different customers');
+                    if (orderData.customer_id) {
+                        customerIds.add(orderData.customer_id);
                     }
                     if (orderHasBlockingInvoice(orderData)) {
                         throw new Error('active_invoice');
@@ -4098,19 +4073,25 @@ document.getElementById('action-add-to-invoice').addEventListener('click', funct
         })
         .catch(error => {
             console.error('Error fetching order data:', error);
-            if (error.message && error.message.startsWith('not_ready_for_dispatch')) {
-                showOrderNotice('Ready for Dispatch Required', 'Only items with status "Ready for Dispatch" can be added to an invoice or dispatched.', 'warning');
-            } else if (error.message === 'active_invoice') {
+            if (error.message === 'active_invoice') {
                 showOrderNotice('Active Invoice Exists', 'One or more selected orders already have an active invoice. Cancel or use a different order.', 'error');
             } else {
-                showOrderNotice('Customer Mismatch', 'Selected orders belong to different customers. Cannot create invoice.', 'error');
+                showOrderNotice('Error', 'Could not validate selected orders for invoicing.', 'error');
             }
             throw error;
         });
     }
     
     validationPromise.then(() => {
-        // Validation passed, proceed with form submission
+        if (customerIds.size > 1) {
+            // Multi-customer selection -> Trigger Background Bulk Invoicing
+            if (confirm(`You have selected ${oids.length} items across ${customerIds.size} different customers.\n\nWould you like to process these invoices in the background?`)) {
+                triggerBulkBackgroundInvoicing(oids, customerIds.size);
+            }
+            return;
+        }
+
+        // Single customer -> Standard single-customer invoice form submission
         const form = document.getElementById('orders-form');
         form.querySelectorAll('input[name="poitem[]"]').forEach(el => {
             if (!oids.includes(parseInt(el.value))) {
@@ -4136,6 +4117,30 @@ document.getElementById('action-add-to-invoice').addEventListener('click', funct
         console.error('Validation failed:', error);
     });
 });
+
+function triggerBulkBackgroundInvoicing(itemIds, customerCount) {
+    if (typeof showOrderNotice === 'function') {
+        showOrderNotice('Processing Batch', `Creating bulk job for ${itemIds.length} items across ${customerCount} customers...`, 'info');
+    }
+
+    fetch('index.php?page=invoices&action=create_bulk_background', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_ids: itemIds })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success && data.report_url) {
+            window.location.href = data.report_url;
+        } else {
+            showOrderNotice('Bulk Invoice Error', data.message || 'Failed to initiate background invoicing.', 'error');
+        }
+    })
+    .catch(err => {
+        console.error('Bulk background trigger error:', err);
+        showOrderNotice('Request Error', 'Network error while initiating bulk invoicing.', 'error');
+    });
+}
 
 // Bulk Dispatch & Excel Export handler
 const bulkDispatchBtn = document.getElementById('action-bulk-dispatch');
