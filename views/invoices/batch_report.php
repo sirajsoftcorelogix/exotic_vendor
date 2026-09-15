@@ -81,7 +81,10 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
     <!-- Progress Bar -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
         <div class="flex justify-between items-center mb-1 text-xs font-semibold text-gray-700">
-            <span>Processing Status</span>
+            <span class="flex items-center gap-2">
+                <span>Processing Status</span>
+                <span id="processingSpinner" class="inline-block animate-spin text-amber-600 text-sm <?= ($status === 'completed' || $status === 'failed' || $status === 'partially_completed') ? 'hidden' : '' ?>">⚙</span>
+            </span>
             <span id="progressBarLabel"><?= $procCust ?> / <?= $totalCust ?> Customers Processed (<?= $pct ?>%)</span>
         </div>
         <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
@@ -93,12 +96,12 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
     <div class="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden mb-6">
         <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
             <h2 class="text-base font-bold text-gray-800">Customer Invoice Breakdown</h2>
-            <?php if ($errCount > 0): ?>
-                <button type="button" onclick="retryFailedItems()" 
-                        class="text-xs font-semibold bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition">
-                    🔄 Retry Failed Items (<?= $errCount ?>)
+            <div class="flex items-center gap-2">
+                <button id="retryFailedBtn" type="button" onclick="retryFailedItems()" 
+                        class="text-xs font-semibold bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition <?= $errCount > 0 ? '' : 'hidden' ?>">
+                    🔄 Retry Failed Items (<span id="retryErrCount"><?= $errCount ?></span>)
                 </button>
-            <?php endif; ?>
+            </div>
         </div>
 
         <div class="overflow-x-auto">
@@ -160,6 +163,8 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
                                         </span>
                                     <?php elseif ($itemStat === 'completed'): ?>
                                         <span class="text-green-600">✓ Invoice created successfully</span>
+                                    <?php elseif ($itemStat === 'processing'): ?>
+                                        <span class="text-blue-600 font-semibold animate-pulse">⏳ Processing invoice...</span>
                                     <?php else: ?>
                                         <span class="text-gray-400">Queued for background worker</span>
                                     <?php endif; ?>
@@ -189,31 +194,46 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
     const batchId = <?= $batchId ?>;
     let isFinished = <?= ($status === 'completed' || $status === 'failed' || $status === 'partially_completed') ? 'true' : 'false' ?>;
 
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     function pollStatus() {
         if (isFinished) return;
 
-        fetch('index.php?page=invoices&action=batch_status_ajax&batch_id=' + batchId)
-            .then(res => res.json())
+        fetch('index.php?page=invoices&action=process_batch_chunk&batch_id=' + batchId)
+            .then(res => {
+                if (res.redirected || (res.headers.get('content-type') && res.headers.get('content-type').includes('text/html'))) {
+                    window.location.reload();
+                    return null;
+                }
+                return res.json();
+            })
             .then(data => {
+                if (!data) return;
                 if (data.success && data.batch) {
                     updateUI(data.batch, data.items || []);
                     if (data.batch.status === 'completed' || data.batch.status === 'failed' || data.batch.status === 'partially_completed') {
                         isFinished = true;
+                        const spinner = document.getElementById('processingSpinner');
+                        if (spinner) spinner.classList.add('hidden');
                     } else {
-                        // Fallback chunk runner to advance processing if CLI background worker isn't running
-                        triggerChunkProcessor();
-                        setTimeout(pollStatus, 2000);
+                        setTimeout(pollStatus, 800);
                     }
+                } else {
+                    setTimeout(pollStatus, 2000);
                 }
             })
             .catch(err => {
-                console.error('Polling error:', err);
-                setTimeout(pollStatus, 4000);
+                console.error('Processing poll error:', err);
+                setTimeout(pollStatus, 3000);
             });
-    }
-
-    function triggerChunkProcessor() {
-        fetch('index.php?page=invoices&action=process_batch_chunk&batch_id=' + batchId);
     }
 
     function updateUI(batch, items) {
@@ -231,9 +251,96 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
         document.getElementById('progressBarLabel').textContent = proc + ' / ' + total + ' Customers Processed (' + pct + '%)';
         document.getElementById('progressBarFill').style.width = pct + '%';
 
+        const retryBtn = document.getElementById('retryFailedBtn');
+        const retryErrCount = document.getElementById('retryErrCount');
+        if (retryBtn && retryErrCount) {
+            retryErrCount.textContent = err;
+            if (err > 0) {
+                retryBtn.classList.remove('hidden');
+            } else {
+                retryBtn.classList.add('hidden');
+            }
+        }
+
         const badge = document.getElementById('batchStatusBadge');
         if (badge) {
-            badge.textContent = (batch.status || '').toUpperCase().replace('_', ' ');
+            const st = (batch.status || 'pending').toLowerCase();
+            badge.textContent = st.toUpperCase().replace('_', ' ');
+            const badgeClasses = {
+                'completed': 'bg-green-100 text-green-800 border-green-300',
+                'partially_completed': 'bg-amber-100 text-amber-800 border-amber-300',
+                'processing': 'bg-blue-100 text-blue-800 border-blue-300 animate-pulse',
+                'pending': 'bg-gray-100 text-gray-800 border-gray-300',
+                'failed': 'bg-red-100 text-red-800 border-red-300'
+            };
+            badge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full border ' + (badgeClasses[st] || badgeClasses.pending);
+        }
+
+        const tbody = document.getElementById('batchItemsBody');
+        if (tbody && Array.isArray(items) && items.length > 0) {
+            let html = '';
+            items.forEach(row => {
+                const itemStat = (row.status || 'pending').toLowerCase();
+                const badgeClass = {
+                    'completed': 'bg-green-100 text-green-800',
+                    'failed': 'bg-red-100 text-red-800',
+                    'processing': 'bg-blue-100 text-blue-800 animate-pulse',
+                    'pending': 'bg-gray-100 text-gray-700'
+                }[itemStat] || 'bg-gray-100 text-gray-700';
+
+                let orderNos = [];
+                try {
+                    orderNos = JSON.parse(row.order_numbers || '[]');
+                } catch(e) {
+                    orderNos = [];
+                }
+                const orderNoStr = Array.isArray(orderNos) && orderNos.length > 0 ? orderNos.join(', ') : '-';
+                const invId = parseInt(row.invoice_id, 10) || 0;
+                const invNo = escapeHtml(row.invoice_number || '');
+                const amount = parseFloat(row.invoice_amount || 0);
+
+                let statusDetail = '<span class="text-gray-400">Queued for background worker</span>';
+                if (itemStat === 'processing') {
+                    statusDetail = '<span class="text-blue-600 font-semibold animate-pulse">⏳ Processing invoice...</span>';
+                } else if (itemStat === 'completed') {
+                    statusDetail = '<span class="text-green-600">✓ Invoice created successfully</span>';
+                } else if (row.error_message) {
+                    statusDetail = `<span class="text-red-600 font-semibold" title="${escapeHtml(row.error_message)}">❌ ${escapeHtml(row.error_message)}</span>`;
+                }
+
+                let actionHtml = '<span class="text-gray-400 text-xs">-</span>';
+                if (invId > 0) {
+                    actionHtml = `<a href="index.php?page=invoices&action=generate_pdf&invoice_id=${invId}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-xs font-bold text-amber-600 hover:text-amber-700 underline">📄 View PDF</a>`;
+                }
+
+                html += `<tr id="batch-item-row-${row.id}" class="hover:bg-gray-50">
+                    <td class="px-6 py-4 font-semibold text-gray-900">
+                        ${escapeHtml(row.customer_name || ('Customer #' + row.customer_id))}
+                        <span class="block text-xs font-normal text-gray-400">ID: #${row.customer_id}</span>
+                    </td>
+                    <td class="px-6 py-4 text-gray-700">
+                        <span class="font-mono text-xs bg-gray-100 px-2 py-1 rounded">${escapeHtml(orderNoStr)}</span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${badgeClass}">
+                            ${itemStat.toUpperCase()}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 font-mono font-bold text-indigo-600">
+                        ${invNo !== '' ? invNo : '-'}
+                    </td>
+                    <td class="px-6 py-4 text-right font-semibold text-gray-900">
+                        ${amount > 0 ? ('₹' + amount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})) : '-'}
+                    </td>
+                    <td class="px-6 py-4 text-xs text-gray-600 max-w-xs truncate">
+                        ${statusDetail}
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        ${actionHtml}
+                    </td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
         }
     }
 
@@ -243,12 +350,15 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
             .then(res => res.json())
             .then(data => {
                 alert(data.message || 'Retried items.');
-                window.location.reload();
+                isFinished = false;
+                const spinner = document.getElementById('processingSpinner');
+                if (spinner) spinner.classList.remove('hidden');
+                pollStatus();
             });
     };
 
     if (!isFinished) {
-        setTimeout(pollStatus, 1500);
+        setTimeout(pollStatus, 500);
     }
 })();
 </script>
