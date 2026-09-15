@@ -358,7 +358,7 @@ class PurchaseOrder {
 
             foreach ($poData['items'] as $it) {
                 $insItemStmt->bind_param(
-                    "isssddddssss",
+                    "issssddddssss",
                     $poId,
                     $it['order_number'],
                     $it['title'],
