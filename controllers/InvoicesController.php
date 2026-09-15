@@ -2701,9 +2701,9 @@ class InvoicesController
 
         $pdfFiles = [];
         require_once __DIR__ . '/../models/invoice/invoice.php';
-        require_once __DIR__ . '/../models/comman/comman.php';
+        require_once __DIR__ . '/../models/comman/tables.php';
         $invoiceModel = new Invoice($conn);
-        $commanModel = new Comman($conn);
+        $commanModel = new Tables($conn);
 
         foreach ($invoiceIds as $invId) {
             $invoice = $invoiceModel->getInvoiceById($invId);

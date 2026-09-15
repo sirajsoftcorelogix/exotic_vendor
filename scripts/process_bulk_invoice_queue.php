@@ -18,7 +18,7 @@ require_once $root . '/helpers/html_helpers.php';
 require_once $root . '/models/invoice/invoice.php';
 require_once $root . '/models/invoice/BulkInvoiceBatch.php';
 require_once $root . '/models/order/order.php';
-require_once $root . '/models/comman/comman.php';
+require_once $root . '/models/comman/tables.php';
 require_once $root . '/helpers/invoice/InvoiceRequestBuilder.php';
 require_once $root . '/helpers/invoice/InvoiceCreationService.php';
 require_once $root . '/helpers/invoice/invoice_gst.php';
@@ -58,7 +58,7 @@ if ($isCli) {
 $bulkBatchModel = new BulkInvoiceBatch($conn);
 $invoiceModel = new Invoice($conn);
 $ordersModel = new Order($conn);
-$commanModel = new Comman($conn);
+$commanModel = new Tables($conn);
 $creationService = new InvoiceCreationService($conn, $invoiceModel, $ordersModel, $commanModel);
 
 $processedCount = 0;
