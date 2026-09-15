@@ -2396,12 +2396,41 @@ class InvoicesController
         $bulkBatchModel = new BulkInvoiceBatch($conn);
 
         // Fetch selected order lines
-        $orderLines = $ordersModel->getOrdersByIds($itemIds);
-        if (empty($orderLines)) {
+        $selectedLines = $ordersModel->getOrdersByIds($itemIds);
+        if (empty($selectedLines)) {
             ob_clean();
             echo json_encode(['success' => false, 'message' => 'Selected order items were not found.']);
             exit;
         }
+
+        // Expand to include ALL order lines for the selected order numbers
+        $orderNumbersToExpand = [];
+        $expandedOrderLinesMap = [];
+
+        foreach ($selectedLines as $line) {
+            $id = (int)($line['id'] ?? 0);
+            if ($id > 0) {
+                $expandedOrderLinesMap[$id] = $line;
+            }
+            $orderNo = trim((string)($line['order_number'] ?? ''));
+            if ($orderNo !== '') {
+                $orderNumbersToExpand[$orderNo] = true;
+            }
+        }
+
+        foreach (array_keys($orderNumbersToExpand) as $orderNo) {
+            $allLinesForOrder = $ordersModel->getOrderByOrderNumber($orderNo);
+            if (is_array($allLinesForOrder)) {
+                foreach ($allLinesForOrder as $line) {
+                    $id = (int)($line['id'] ?? 0);
+                    if ($id > 0) {
+                        $expandedOrderLinesMap[$id] = $line;
+                    }
+                }
+            }
+        }
+
+        $orderLines = array_values($expandedOrderLinesMap);
 
         // Group items by customer_id
         $customerGroups = [];
@@ -2417,9 +2446,24 @@ class InvoicesController
             }
 
             $customerId = (int)($row['customer_id'] ?? 0);
+            $orderNo = trim((string)($row['order_number'] ?? ''));
+
+            if ($customerId <= 0 && $orderNo !== '') {
+                $info = $ordersModel->getRemarksByOrderNumber($orderNo);
+                if (is_array($info) && !empty($info['customer_id'])) {
+                    $customerId = (int)$info['customer_id'];
+                }
+            }
+
             if ($customerId <= 0) continue;
 
-            $custName = trim((string)($row['customer_name'] ?? ($row['name'] ?? ('Customer #' . $customerId))));
+            $custName = trim((string)($row['customer_name'] ?? ($row['name'] ?? '')));
+            if (empty($custName) && $orderNo !== '') {
+                $info = $ordersModel->getRemarksByOrderNumber($orderNo);
+                if (is_array($info)) {
+                    $custName = trim(($info['first_name'] ?? '') . ' ' . ($info['last_name'] ?? ''));
+                }
+            }
             if (empty($custName)) {
                 $custName = 'Customer #' . $customerId;
             }

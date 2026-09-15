@@ -145,85 +145,54 @@ class BulkInvoiceBatch
 
     /**
      * Get next pending item for processing (or retry stuck item).
-     * Locks/reserves it to prevent concurrent worker duplication.
+     * Uses atomic UPDATE to prevent concurrent worker duplication.
      */
     public function lockNextPendingItem(int $batchId = 0): ?array
     {
-        // 1. Try to lock a 'pending' item
-        $where = "status = 'pending'";
-        $types = "";
-        $params = [];
+        // 1. Try to claim a 'pending' item atomically
+        $sql = "UPDATE vp_invoice_bulk_batch_items 
+                SET status = 'processing', processed_at = NOW() 
+                WHERE status = 'pending' " . ($batchId > 0 ? "AND batch_id = " . (int)$batchId . " " : "") . "
+                ORDER BY id ASC LIMIT 1";
 
-        if ($batchId > 0) {
-            $where .= " AND batch_id = ?";
-            $types .= "i";
-            $params[] = $batchId;
+        @$this->db->query($sql);
+        $affected = $this->db->affected_rows;
+
+        // 2. If no pending item was claimed, try claiming a stuck 'processing' item (older than 30 seconds)
+        if ($affected <= 0) {
+            $stuckSql = "UPDATE vp_invoice_bulk_batch_items 
+                         SET processed_at = NOW() 
+                         WHERE status = 'processing' 
+                           AND (processed_at IS NULL OR processed_at < NOW() - INTERVAL 30 SECOND) " . ($batchId > 0 ? "AND batch_id = " . (int)$batchId . " " : "") . "
+                         ORDER BY id ASC LIMIT 1";
+            @$this->db->query($stuckSql);
+            $affected = $this->db->affected_rows;
         }
 
-        $sql = "SELECT * FROM vp_invoice_bulk_batch_items WHERE {$where} ORDER BY id ASC LIMIT 1 FOR UPDATE";
-        $stmt = $this->db->prepare($sql);
-        if ($stmt) {
-            if (!empty($params)) {
-                $stmt->bind_param($types, ...$params);
-            }
-            $stmt->execute();
-            $res = $stmt->get_result();
-            $row = $res ? $res->fetch_assoc() : null;
-            $stmt->close();
-
-            if ($row) {
-                $up = $this->db->prepare("UPDATE vp_invoice_bulk_batch_items SET status = 'processing', processed_at = NOW() WHERE id = ?");
-                if ($up) {
-                    $up->bind_param("i", $row['id']);
-                    $up->execute();
-                    $up->close();
-                }
-
-                $bId = (int)$row['batch_id'];
-                $bUp = $this->db->prepare("UPDATE vp_invoice_bulk_batches SET status = 'processing', started_at = COALESCE(started_at, NOW()) WHERE id = ? AND status = 'pending'");
-                if ($bUp) {
-                    $bUp->bind_param("i", $bId);
-                    $bUp->execute();
-                    $bUp->close();
-                }
-                return $row;
-            }
+        if ($affected <= 0) {
+            return null;
         }
 
-        // 2. If no pending item, pick up stuck 'processing' items (older than 10s or processed_at IS NULL)
-        $stuckWhere = "status = 'processing' AND (processed_at IS NULL OR processed_at < NOW() - INTERVAL 10 SECOND)";
-        $stuckParams = [];
-        $stuckTypes = "";
+        // Fetch the item we just claimed (most recently updated with status 'processing')
+        $fetchSql = "SELECT * FROM vp_invoice_bulk_batch_items 
+                    WHERE status = 'processing' " . ($batchId > 0 ? "AND batch_id = " . (int)$batchId . " " : "") . " 
+                    ORDER BY processed_at DESC LIMIT 1";
 
-        if ($batchId > 0) {
-            $stuckWhere .= " AND batch_id = ?";
-            $stuckTypes .= "i";
-            $stuckParams[] = $batchId;
-        }
+        $res = $this->db->query($fetchSql);
+        $row = $res ? $res->fetch_assoc() : null;
 
-        $stuckSql = "SELECT * FROM vp_invoice_bulk_batch_items WHERE {$stuckWhere} ORDER BY id ASC LIMIT 1 FOR UPDATE";
-        $stuckStmt = $this->db->prepare($stuckSql);
-        if ($stuckStmt) {
-            if (!empty($stuckParams)) {
-                $stuckStmt->bind_param($stuckTypes, ...$stuckParams);
-            }
-            $stuckStmt->execute();
-            $stuckRes = $stuckStmt->get_result();
-            $stuckRow = $stuckRes ? $stuckRes->fetch_assoc() : null;
-            $stuckStmt->close();
-
-            if ($stuckRow) {
-                $up = $this->db->prepare("UPDATE vp_invoice_bulk_batch_items SET processed_at = NOW() WHERE id = ?");
-                if ($up) {
-                    $up->bind_param("i", $stuckRow['id']);
-                    $up->execute();
-                    $up->close();
-                }
-                return $stuckRow;
+        if ($row) {
+            // Mark main batch as processing & record start time if pending
+            $bId = (int)$row['batch_id'];
+            $bUp = $this->db->prepare("UPDATE vp_invoice_bulk_batches SET status = 'processing', started_at = COALESCE(started_at, NOW()) WHERE id = ? AND status = 'pending'");
+            if ($bUp) {
+                $bUp->bind_param("i", $bId);
+                $bUp->execute();
+                $bUp->close();
             }
         }
 
-        return null;
+        return $row ?: null;
     }
 
     /**
@@ -246,6 +215,56 @@ class BulkInvoiceBatch
             if (empty($orderLines)) {
                 $this->markItemFailed($itemId, "Order lines not found for IDs: " . implode(', ', $orderItemIds));
                 return ['success' => false, 'item_id' => $itemId, 'message' => "Order lines not found"];
+            }
+
+            // Expand orderLines to ensure ALL items for the order numbers are included
+            $orderNos = [];
+            $allLinesMap = [];
+            foreach ($orderLines as $ol) {
+                $lid = (int)($ol['id'] ?? 0);
+                if ($lid > 0) $allLinesMap[$lid] = $ol;
+                $ono = trim((string)($ol['order_number'] ?? ''));
+                if ($ono !== '') $orderNos[$ono] = true;
+            }
+
+            foreach (array_keys($orderNos) as $ono) {
+                $linesForNo = $ordersModel->getOrderByOrderNumber($ono);
+                if (is_array($linesForNo)) {
+                    foreach ($linesForNo as $lfn) {
+                        $lid = (int)($lfn['id'] ?? 0);
+                        if ($lid > 0 && !isset($allLinesMap[$lid])) {
+                            $invId = (int)($lfn['invoice_id'] ?? 0);
+                            $invStat = strtolower(trim((string)($lfn['invoice_status'] ?? '')));
+                            if ($invId > 0 && $invStat !== 'cancelled') {
+                                continue;
+                            }
+                            $allLinesMap[$lid] = $lfn;
+                        }
+                    }
+                }
+            }
+            $orderLines = array_values($allLinesMap);
+
+            // Check if any of these order lines already have an active invoice assigned
+            foreach ($orderLines as $orderLine) {
+                $existingInvId = (int)($orderLine['invoice_id'] ?? 0);
+                if ($existingInvId > 0) {
+                    $invRes = $this->db->query("SELECT id, invoice_number, total_amount, status FROM vp_invoices WHERE id = " . $existingInvId . " LIMIT 1");
+                    if ($invRes && $invRow = $invRes->fetch_assoc()) {
+                        if (strtolower(trim((string)$invRow['status'])) !== 'cancelled') {
+                            $invNo = (string)($invRow['invoice_number'] ?? '');
+                            $invAmt = (float)($invRow['total_amount'] ?? 0.0);
+                            $this->markItemCompleted($itemId, $existingInvId, $invNo, $invAmt);
+                            return [
+                                'success' => true,
+                                'item_id' => $itemId,
+                                'invoice_id' => $existingInvId,
+                                'invoice_number' => $invNo,
+                                'amount' => $invAmt
+                            ];
+                        }
+                    }
+                }
             }
 
             $batchHeader = $this->getBatchById($batchId);
