@@ -2044,18 +2044,28 @@ class PurchaseOrdersController
         is_login();
         global $purchaseOrdersModel;
 
-        $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+        // Check if request is AJAX (by header, parameter, or accept header)
+        $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+            || (!empty($_POST['is_ajax']) || !empty($_GET['is_ajax']))
+            || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false);
 
-        if (empty($_FILES['import_file']['tmp_name']) || !is_uploaded_file($_FILES['import_file']['tmp_name'])) {
-            $res = ['success' => false, 'message' => 'Please select a valid CSV or Excel file to upload.'];
+        $sendJsonResponse = function (array $response) use ($isAjax) {
             if ($isAjax) {
-                header('Content-Type: application/json');
-                echo json_encode($res);
+                while (ob_get_level() > 0) {
+                    @ob_end_clean();
+                }
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($response, JSON_UNESCAPED_UNICODE);
                 exit;
             } else {
-                renderTemplate('views/purchase_orders/import_csv.php', ['result' => $res], 'Import Purchase Orders');
+                renderTemplate('views/purchase_orders/import_csv.php', ['result' => $response], 'Import Purchase Orders');
                 return;
             }
+        };
+
+        if (empty($_FILES['import_file']['tmp_name']) || !is_uploaded_file($_FILES['import_file']['tmp_name'])) {
+            $sendJsonResponse(['success' => false, 'message' => 'Please select a valid CSV or Excel file to upload.']);
+            return;
         }
 
         $tmpFile = $_FILES['import_file']['tmp_name'];
@@ -2129,26 +2139,16 @@ class PurchaseOrdersController
         }
 
         if (empty($rows)) {
-            $res = ['success' => false, 'message' => 'Failed to parse file or file is empty. Please verify file content.'];
-            if ($isAjax) {
-                header('Content-Type: application/json');
-                echo json_encode($res);
-                exit;
-            } else {
-                renderTemplate('views/purchase_orders/import_csv.php', ['result' => $res], 'Import Purchase Orders');
-                return;
-            }
+            $sendJsonResponse(['success' => false, 'message' => 'Failed to parse file or file is empty. Please verify file content.']);
+            return;
         }
 
-        $userId = (int)($_SESSION['user']['id'] ?? 0);
-        $result = $purchaseOrdersModel->importPurchaseOrdersFromData($rows, $userId);
-
-        if ($isAjax) {
-            header('Content-Type: application/json');
-            echo json_encode($result);
-            exit;
-        } else {
-            renderTemplate('views/purchase_orders/import_csv.php', ['result' => $result], 'Import Purchase Orders');
+        try {
+            $userId = (int)($_SESSION['user']['id'] ?? 0);
+            $result = $purchaseOrdersModel->importPurchaseOrdersFromData($rows, $userId);
+            $sendJsonResponse($result);
+        } catch (\Throwable $e) {
+            $sendJsonResponse(['success' => false, 'message' => 'Import Error: ' . $e->getMessage()]);
         }
     }
 

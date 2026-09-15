@@ -39,7 +39,9 @@ $result = $result ?? null;
                     Upload File (.csv, .xlsx, .xls)
                 </h2>
 
-                <form id="importPoForm" action="?page=purchase_orders&action=import_csv_post" method="POST" enctype="multipart/form-data">
+                <form id="importPoForm" action="?page=purchase_orders&action=import_csv_post" method="POST" enctype="multipart/form-data" onsubmit="return false;">
+                    <input type="hidden" name="is_ajax" value="1">
+                    
                     <div class="border-2 border-dashed border-gray-300 hover:border-amber-500 rounded-xl p-8 text-center bg-gray-50 hover:bg-amber-50/30 transition-all cursor-pointer relative" id="dropZone">
                         <input type="file" name="import_file" id="import_file" accept=".csv, .xlsx, .xls" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" required onchange="updateFileName(this)">
                         
@@ -71,11 +73,11 @@ $result = $result ?? null;
                 </form>
             </div>
 
-            <!-- Import Results Section -->
+            <!-- Import Results Summary Section (Background View) -->
             <div id="resultsContainer" class="<?php echo $result ? '' : 'hidden'; ?> bg-white rounded-xl shadow-md border border-gray-200 p-6 space-y-4">
                 <h2 class="text-lg font-bold text-gray-800 border-b border-gray-100 pb-3 flex items-center gap-2">
                     <i class="fa-solid fa-square-poll-vertical text-amber-600"></i>
-                    Import Report Summary
+                    Latest Import Summary
                 </h2>
 
                 <div id="statusMessage" class="p-4 rounded-lg text-sm font-medium">
@@ -209,7 +211,7 @@ $result = $result ?? null;
                     • Rows with the same <strong>PO Number</strong> will be grouped into a single Purchase Order with multiple item lines.
                 </p>
                 <p>
-                    • If vendor names in the file do not exist in the database, new vendor profiles will be created automatically.
+                    • If vendor names or codes in the file do not exist in the database, new vendor profiles will be created automatically.
                 </p>
                 <p>
                     • If <strong>PO Number</strong> is left blank, the system will automatically generate a unique PO number formatted as <code>PO-YYYY-XXXXXX</code>.
@@ -219,7 +221,152 @@ $result = $result ?? null;
     </div>
 </div>
 
+<!-- ========================================================================= -->
+<!-- Import Progress & Status Modal (Popup) -->
+<!-- ========================================================================= -->
+<div id="importProgressModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-2xl overflow-hidden transform transition-all my-8">
+        
+        <!-- Modal Header -->
+        <div class="bg-slate-800 text-white px-6 py-4 flex items-center justify-between">
+            <h3 class="text-base font-bold flex items-center gap-2" id="modalHeaderTitle">
+                <i class="fa-solid fa-cloud-arrow-up text-amber-400"></i>
+                Importing Purchase Orders
+            </h3>
+            <button type="button" id="modalCloseBtn" onclick="closeProgressModal()" class="text-gray-400 hover:text-white text-xl font-bold px-2 py-0.5 rounded transition hidden" aria-label="Close">
+                &times;
+            </button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="p-6 space-y-6">
+            
+            <!-- STATE 1: PROCESSING / PROGRESS -->
+            <div id="modalStateProcessing" class="space-y-5 text-center py-4">
+                <div class="relative w-20 h-20 mx-auto flex items-center justify-center">
+                    <span class="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-20 animate-ping"></span>
+                    <div class="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-3xl shadow-inner relative">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="text-lg font-bold text-gray-800" id="progressStatusText">Uploading File & Reading Data...</h4>
+                    <p class="text-xs text-gray-500 mt-1" id="progressSubText">Please wait while the system processes your purchase order records.</p>
+                </div>
+
+                <!-- Animated Progress Bar -->
+                <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden shadow-inner p-0.5">
+                    <div id="progressBar" class="bg-gradient-to-r from-amber-500 to-emerald-500 h-full rounded-full transition-all duration-300 text-[10px] font-bold text-white flex items-center justify-center leading-none" style="width: 15%">
+                        <span id="progressBarText">15%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STATE 2: SUCCESS REPORT -->
+            <div id="modalStateSuccess" class="hidden space-y-5">
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-3 shadow-inner">
+                        <i class="fa-solid fa-circle-check"></i>
+                    </div>
+                    <h4 class="text-xl font-bold text-gray-800" id="modalSuccessTitle">Purchase Orders Created Successfully!</h4>
+                    <p class="text-xs text-emerald-700 font-medium mt-1 bg-emerald-50 py-1.5 px-3 rounded-full inline-block border border-emerald-200" id="modalSuccessMessage">
+                        Import completed. All valid records have been saved into the database.
+                    </p>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-3 gap-3 text-center">
+                    <div class="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                        <div id="modalStatPos" class="text-2xl font-bold text-amber-700">0</div>
+                        <div class="text-[11px] font-bold text-amber-800 uppercase tracking-wider mt-0.5">POs Created</div>
+                    </div>
+                    <div class="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                        <div id="modalStatItems" class="text-2xl font-bold text-blue-700">0</div>
+                        <div class="text-[11px] font-bold text-blue-800 uppercase tracking-wider mt-0.5">Line Items</div>
+                    </div>
+                    <div class="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                        <div id="modalStatSkipped" class="text-2xl font-bold text-gray-700">0</div>
+                        <div class="text-[11px] font-bold text-gray-600 uppercase tracking-wider mt-0.5">Skipped / Warnings</div>
+                    </div>
+                </div>
+
+                <!-- Details Table inside Modal -->
+                <div class="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <div class="bg-gray-100 px-4 py-2 text-xs font-bold text-gray-700 uppercase tracking-wider flex justify-between items-center">
+                        <span>Created Purchase Orders</span>
+                        <span class="text-[11px] font-normal text-gray-500">Summary</span>
+                    </div>
+                    <div class="max-h-56 overflow-y-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-xs">
+                            <thead class="bg-gray-50 text-gray-600 sticky top-0">
+                                <tr>
+                                    <th class="px-3 py-2 text-left font-bold">PO Number</th>
+                                    <th class="px-3 py-2 text-left font-bold">Vendor</th>
+                                    <th class="px-3 py-2 text-center font-bold">Items</th>
+                                    <th class="px-3 py-2 text-right font-bold">Amount</th>
+                                    <th class="px-3 py-2 text-center font-bold">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modalTableBody" class="bg-white divide-y divide-gray-100">
+                                <!-- Dynamic Rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Warnings/Errors in Modal if any -->
+                <div id="modalWarningsContainer" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1">
+                    <div class="font-bold flex items-center gap-1.5 text-amber-900">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
+                        <span>Warnings / Non-critical Errors:</span>
+                    </div>
+                    <ul id="modalWarningsList" class="list-disc list-inside space-y-0.5 text-[11px]"></ul>
+                </div>
+            </div>
+
+            <!-- STATE 3: ERROR REPORT -->
+            <div id="modalStateError" class="hidden space-y-4 text-center">
+                <div class="w-16 h-16 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-3xl mx-auto shadow-inner">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <div>
+                    <h4 class="text-xl font-bold text-gray-800">Import Failed</h4>
+                    <p class="text-xs text-rose-700 font-medium mt-1 bg-rose-50 p-3 rounded-xl border border-rose-200 text-left" id="modalErrorMessage">
+                        An error occurred while attempting to import the file.
+                    </p>
+                </div>
+                <div id="modalErrorDetailList" class="hidden text-left bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-rose-700 max-h-40 overflow-y-auto space-y-1">
+                    <div class="font-bold text-gray-800">Detailed Errors:</div>
+                    <ul id="modalErrorUl" class="list-disc list-inside space-y-0.5"></ul>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end gap-3" id="modalFooter">
+            <button type="button" id="btnCancelProcessing" onclick="closeProgressModal()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg text-xs transition">
+                Cancel
+            </button>
+            <a href="<?php echo base_url('?page=purchase_orders&action=stock_purchase'); ?>" id="btnViewPOs" class="hidden bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-5 rounded-lg text-xs shadow flex items-center gap-2 transition">
+                <i class="fa-solid fa-list-check"></i>
+                View All Purchase Orders
+            </a>
+            <button type="button" id="btnCloseSuccess" onclick="closeProgressModal(true)" class="hidden bg-gray-700 hover:bg-gray-800 text-white font-semibold py-2 px-4 rounded-lg text-xs transition">
+                Close & Refresh
+            </button>
+            <button type="button" id="btnCloseError" onclick="closeProgressModal(false)" class="hidden bg-rose-600 hover:bg-rose-700 text-white font-semibold py-2 px-4 rounded-lg text-xs transition">
+                Close & Try Again
+            </button>
+        </div>
+
+    </div>
+</div>
+
 <script>
+let progressInterval = null;
+
 function updateFileName(input) {
     const selectedDiv = document.getElementById('selectedFileName');
     const fileNameText = document.getElementById('fileNameText');
@@ -232,8 +379,234 @@ function updateFileName(input) {
     }
 }
 
+function showProgressModal() {
+    const modal = document.getElementById('importProgressModal');
+    const modalStateProcessing = document.getElementById('modalStateProcessing');
+    const modalStateSuccess = document.getElementById('modalStateSuccess');
+    const modalStateError = document.getElementById('modalStateError');
+    const modalCloseBtn = document.getElementById('modalCloseBtn');
+    
+    const btnCancelProcessing = document.getElementById('btnCancelProcessing');
+    const btnViewPOs = document.getElementById('btnViewPOs');
+    const btnCloseSuccess = document.getElementById('btnCloseSuccess');
+    const btnCloseError = document.getElementById('btnCloseError');
+
+    // Show modal & set processing state
+    modal.classList.remove('hidden');
+    modalStateProcessing.classList.remove('hidden');
+    modalStateSuccess.classList.add('hidden');
+    modalStateError.classList.add('hidden');
+    
+    modalCloseBtn.classList.add('hidden');
+    btnCancelProcessing.classList.remove('hidden');
+    btnViewPOs.classList.add('hidden');
+    btnCloseSuccess.classList.add('hidden');
+    btnCloseError.classList.add('hidden');
+
+    // Reset progress bar
+    updateProgressBar(15, 'Uploading File & Reading Data...');
+
+    // Progress animation timer
+    let percent = 15;
+    if (progressInterval) clearInterval(progressInterval);
+    
+    progressInterval = setInterval(() => {
+        if (percent < 85) {
+            percent += Math.floor(Math.random() * 8) + 3;
+            if (percent > 85) percent = 85;
+            
+            let statusText = 'Reading Excel/CSV file rows...';
+            if (percent > 40) statusText = 'Validating vendors & line items...';
+            if (percent > 65) statusText = 'Creating Purchase Orders in database...';
+            
+            updateProgressBar(percent, statusText);
+        }
+    }, 300);
+}
+
+function updateProgressBar(percent, text) {
+    const bar = document.getElementById('progressBar');
+    const barText = document.getElementById('progressBarText');
+    const statusText = document.getElementById('progressStatusText');
+    
+    bar.style.width = percent + '%';
+    barText.textContent = percent + '%';
+    if (text) statusText.textContent = text;
+}
+
+function showSuccessModal(data) {
+    if (progressInterval) clearInterval(progressInterval);
+    updateProgressBar(100, 'Import Complete!');
+
+    setTimeout(() => {
+        const modalStateProcessing = document.getElementById('modalStateProcessing');
+        const modalStateSuccess = document.getElementById('modalStateSuccess');
+        const modalCloseBtn = document.getElementById('modalCloseBtn');
+        
+        const btnCancelProcessing = document.getElementById('btnCancelProcessing');
+        const btnViewPOs = document.getElementById('btnViewPOs');
+        const btnCloseSuccess = document.getElementById('btnCloseSuccess');
+
+        modalStateProcessing.classList.add('hidden');
+        modalStateSuccess.classList.remove('hidden');
+        modalCloseBtn.classList.remove('hidden');
+        
+        btnCancelProcessing.classList.add('hidden');
+        btnViewPOs.classList.remove('hidden');
+        btnCloseSuccess.classList.remove('hidden');
+
+        document.getElementById('modalSuccessMessage').textContent = data.message || 'Import completed successfully.';
+        document.getElementById('modalStatPos').textContent = data.imported_pos || 0;
+        document.getElementById('modalStatItems').textContent = data.imported_items || 0;
+        document.getElementById('modalStatSkipped').textContent = data.skipped_pos || 0;
+
+        // Populate modal details table
+        const modalTbody = document.getElementById('modalTableBody');
+        modalTbody.innerHTML = '';
+
+        if (data.details && data.details.length > 0) {
+            data.details.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50';
+                tr.innerHTML = `
+                    <td class="px-3 py-2 font-bold text-amber-700">${escapeHtml(row.po_number)}</td>
+                    <td class="px-3 py-2 text-gray-700">${escapeHtml(row.vendor_name)}</td>
+                    <td class="px-3 py-2 text-center text-gray-700">${row.items_count}</td>
+                    <td class="px-3 py-2 text-right font-semibold text-gray-800">₹${parseFloat(row.total_cost || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td class="px-3 py-2 text-center">
+                        <a href="?page=purchase_orders&action=view&po_id=${row.po_id}" target="_blank" class="bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800 px-2 py-1 rounded text-[11px] font-bold transition">
+                            View PO <i class="fa-solid fa-arrow-up-right-from-square ml-0.5 text-[9px]"></i>
+                        </a>
+                    </td>
+                `;
+                modalTbody.appendChild(tr);
+            });
+        } else {
+            modalTbody.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-center text-gray-500">No PO details returned.</td></tr>';
+        }
+
+        // Warnings inside modal
+        const warningsContainer = document.getElementById('modalWarningsContainer');
+        const warningsList = document.getElementById('modalWarningsList');
+        warningsList.innerHTML = '';
+        if (data.errors && data.errors.length > 0) {
+            warningsContainer.classList.remove('hidden');
+            data.errors.forEach(err => {
+                const li = document.createElement('li');
+                li.textContent = err;
+                warningsList.appendChild(li);
+            });
+        } else {
+            warningsContainer.classList.add('hidden');
+        }
+
+        // Also update background summary section
+        updateBackgroundSummary(data);
+    }, 400);
+}
+
+function showErrorModal(errorMessage, errorList) {
+    if (progressInterval) clearInterval(progressInterval);
+
+    const modalStateProcessing = document.getElementById('modalStateProcessing');
+    const modalStateError = document.getElementById('modalStateError');
+    const modalCloseBtn = document.getElementById('modalCloseBtn');
+    
+    const btnCancelProcessing = document.getElementById('btnCancelProcessing');
+    const btnCloseError = document.getElementById('btnCloseError');
+
+    modalStateProcessing.classList.add('hidden');
+    modalStateError.classList.remove('hidden');
+    modalCloseBtn.classList.remove('hidden');
+    
+    btnCancelProcessing.classList.add('hidden');
+    btnCloseError.classList.remove('hidden');
+
+    document.getElementById('modalErrorMessage').textContent = errorMessage || 'Import process encountered an error.';
+
+    const detailList = document.getElementById('modalErrorDetailList');
+    const errorUl = document.getElementById('modalErrorUl');
+    errorUl.innerHTML = '';
+
+    if (errorList && errorList.length > 0) {
+        detailList.classList.remove('hidden');
+        errorList.forEach(err => {
+            const li = document.createElement('li');
+            li.textContent = err;
+            errorUl.appendChild(li);
+        });
+    } else {
+        detailList.classList.add('hidden');
+    }
+}
+
+function closeProgressModal(shouldRefresh = false) {
+    if (progressInterval) clearInterval(progressInterval);
+    document.getElementById('importProgressModal').classList.add('hidden');
+    
+    if (shouldRefresh) {
+        document.getElementById('importPoForm').reset();
+        const selectedDiv = document.getElementById('selectedFileName');
+        if (selectedDiv) selectedDiv.classList.add('hidden');
+    }
+}
+
+function updateBackgroundSummary(data) {
+    const resultsContainer = document.getElementById('resultsContainer');
+    const statusMessage = document.getElementById('statusMessage');
+    const statPos = document.getElementById('statPos');
+    const statItems = document.getElementById('statItems');
+    const statSkipped = document.getElementById('statSkipped');
+    const tbody = document.getElementById('detailsTableBody');
+    const errorsSection = document.getElementById('errorsSection');
+    const errorsList = document.getElementById('errorsList');
+
+    if (!resultsContainer) return;
+    resultsContainer.classList.remove('hidden');
+
+    if (data.success) {
+        statusMessage.innerHTML = `<div class="p-4 rounded-lg text-sm font-medium bg-emerald-50 text-emerald-800 border border-emerald-200"><i class="fa-solid fa-circle-check text-emerald-600 mr-2"></i>${escapeHtml(data.message)}</div>`;
+    } else {
+        statusMessage.innerHTML = `<div class="p-4 rounded-lg text-sm font-medium bg-rose-50 text-rose-800 border border-rose-200"><i class="fa-solid fa-circle-xmark text-rose-600 mr-2"></i>${escapeHtml(data.message || 'Import failed.')}</div>`;
+    }
+
+    statPos.textContent = data.imported_pos || 0;
+    statItems.textContent = data.imported_items || 0;
+    statSkipped.textContent = data.skipped_pos || 0;
+
+    tbody.innerHTML = '';
+    if (data.details && data.details.length > 0) {
+        data.details.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-gray-50';
+            tr.innerHTML = `
+                <td class="px-4 py-2 font-bold text-amber-700">${escapeHtml(row.po_number)}</td>
+                <td class="px-4 py-2 text-gray-700">${escapeHtml(row.vendor_name)}</td>
+                <td class="px-4 py-2 text-center text-gray-700">${row.items_count}</td>
+                <td class="px-4 py-2 text-right font-semibold text-gray-800">₹${parseFloat(row.total_cost || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td class="px-4 py-2 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-bold capitalize bg-blue-100 text-blue-800">${escapeHtml(row.status)}</span></td>
+                <td class="px-4 py-2 text-center"><a href="?page=purchase_orders&action=view&po_id=${row.po_id}" target="_blank" class="text-blue-600 hover:underline text-xs font-semibold">View PO</a></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    errorsList.innerHTML = '';
+    if (data.errors && data.errors.length > 0) {
+        errorsSection.classList.remove('hidden');
+        data.errors.forEach(err => {
+            const li = document.createElement('li');
+            li.textContent = err;
+            errorsList.appendChild(li);
+        });
+    } else {
+        errorsSection.classList.add('hidden');
+    }
+}
+
 document.getElementById('importPoForm').addEventListener('submit', function(e) {
     e.preventDefault();
+    e.stopPropagation();
 
     const fileInput = document.getElementById('import_file');
     if (!fileInput.files || fileInput.files.length === 0) {
@@ -244,94 +617,44 @@ document.getElementById('importPoForm').addEventListener('submit', function(e) {
                 tone: 'warning'
             });
         } else {
-            console.error('File required');
+            alert('Please select a CSV or Excel file to import.');
         }
-        return;
+        return false;
     }
 
-    const submitBtn = document.getElementById('submitBtn');
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Processing Import...';
+    // Open progress popup immediately
+    showProgressModal();
 
     const formData = new FormData(this);
+    formData.append('is_ajax', '1');
 
     fetch('?page=purchase_orders&action=import_csv_post', {
         method: 'POST',
         headers: {
-            'X-Requested-With': 'XMLHttpRequest'
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
         },
         body: formData
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Server returned HTTP status ' + response.status);
+        }
+        return response.json();
+    })
     .then(data => {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="fa-solid fa-upload"></i> Start Import Process';
-
-        const resultsContainer = document.getElementById('resultsContainer');
-        const statusMessage = document.getElementById('statusMessage');
-        const statPos = document.getElementById('statPos');
-        const statItems = document.getElementById('statItems');
-        const statSkipped = document.getElementById('statSkipped');
-        const tbody = document.getElementById('detailsTableBody');
-        const errorsSection = document.getElementById('errorsSection');
-        const errorsList = document.getElementById('errorsList');
-
-        resultsContainer.classList.remove('hidden');
-
         if (data.success) {
-            statusMessage.innerHTML = `<div class="p-4 rounded-lg text-sm font-medium bg-emerald-50 text-emerald-800 border border-emerald-200"><i class="fa-solid fa-circle-check text-emerald-600 mr-2"></i>${escapeHtml(data.message)}</div>`;
+            showSuccessModal(data);
         } else {
-            statusMessage.innerHTML = `<div class="p-4 rounded-lg text-sm font-medium bg-rose-50 text-rose-800 border border-rose-200"><i class="fa-solid fa-circle-xmark text-rose-600 mr-2"></i>${escapeHtml(data.message || 'Import failed.')}</div>`;
+            showErrorModal(data.message || 'Import failed.', data.errors || []);
         }
-
-        statPos.textContent = data.imported_pos || 0;
-        statItems.textContent = data.imported_items || 0;
-        statSkipped.textContent = data.skipped_pos || 0;
-
-        tbody.innerHTML = '';
-        if (data.details && data.details.length > 0) {
-            data.details.forEach(row => {
-                const tr = document.createElement('tr');
-                tr.className = 'hover:bg-gray-50';
-                tr.innerHTML = `
-                    <td class="px-4 py-2 font-bold text-amber-700">${escapeHtml(row.po_number)}</td>
-                    <td class="px-4 py-2 text-gray-700">${escapeHtml(row.vendor_name)}</td>
-                    <td class="px-4 py-2 text-center text-gray-700">${row.items_count}</td>
-                    <td class="px-4 py-2 text-right font-semibold text-gray-800">₹${parseFloat(row.total_cost || 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                    <td class="px-4 py-2 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-bold capitalize bg-blue-100 text-blue-800">${escapeHtml(row.status)}</span></td>
-                    <td class="px-4 py-2 text-center"><a href="?page=purchase_orders&action=view&po_id=${row.po_id}" target="_blank" class="text-blue-600 hover:underline text-xs font-semibold">View PO</a></td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        errorsList.innerHTML = '';
-        if (data.errors && data.errors.length > 0) {
-            errorsSection.classList.remove('hidden');
-            data.errors.forEach(err => {
-                const li = document.createElement('li');
-                li.textContent = err;
-                errorsList.appendChild(li);
-            });
-        } else {
-            errorsSection.classList.add('hidden');
-        }
-
-        // Scroll to results
-        resultsContainer.scrollIntoView({ behavior: 'smooth' });
     })
     .catch(error => {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="fa-solid fa-upload"></i> Start Import Process';
         console.error('Import error:', error);
-        if (window.showPosMessageModal) {
-            window.showPosMessageModal({
-                title: 'Import Error',
-                message: 'An unexpected error occurred while uploading. Please check the file and try again.',
-                tone: 'error'
-            });
-        }
+        showErrorModal('An unexpected error occurred while processing the import file. ' + error.message, []);
     });
+
+    return false;
 });
 
 function escapeHtml(text) {
