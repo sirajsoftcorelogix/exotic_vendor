@@ -65,6 +65,8 @@ class InvoiceRequestBuilder
         array $headerOverrides,
         array $options = []
     ): array {
+        require_once __DIR__ . '/pos_order_pricing.php';
+
         $lines = [];
         $useIgst = array_key_exists('use_igst', $options)
             ? !empty($options['use_igst'])
@@ -85,15 +87,51 @@ class InvoiceRequestBuilder
             $primaryCurrency = 'INR';
         }
 
+        $orderInfo = null;
+        $vpOrderInfoId = (int)($headerOverrides['vp_order_info_id'] ?? 0);
+        if ($vpOrderInfoId > 0 && isset($GLOBALS['commanModel'])) {
+            $orderInfo = $GLOBALS['commanModel']->getRecordById('vp_order_info', $vpOrderInfoId);
+        }
+        if (!$orderInfo && !empty($orderItems[0]['order_number'])) {
+            global $ordersModel;
+            if (isset($ordersModel) && method_exists($ordersModel, 'getRemarksByOrderNumber')) {
+                $orderInfo = $ordersModel->getRemarksByOrderNumber((string)$orderItems[0]['order_number']);
+            }
+        }
+
+        $commanModel = $GLOBALS['commanModel'] ?? null;
+        $pricingMap = pos_order_build_line_display_pricing_map($orderItems, null, is_array($orderInfo) ? $orderInfo : null, $commanModel);
+
+        $subtotal = 0.0;
+        $taxAmount = 0.0;
+
         foreach ($orderItems as $order) {
             $qty = max(1, (int)($order['quantity'] ?? 1));
             $gst = (float)($order['gst'] ?? 0);
-            $unitPretax = pos_order_pretax_unit_price($order, 'disc');
+            $lineId = (int)($order['id'] ?? 0);
+            $pricing = $pricingMap[$lineId] ?? null;
 
-            $amount = $unitPretax * $qty;
-            $taxAmount = ($amount * $gst) / 100;
-            $gstRates = invoice_gst_component_rates($gst, $useIgst);
+            if (is_array($pricing) && isset($pricing['taxable_value'])) {
+                $lineTaxable = (float)$pricing['taxable_value'];
+                $unitPretax = $qty > 0 ? round($lineTaxable / $qty, 4) : 0.0;
+                $lineTax = (float)($pricing['total_gst'] ?? 0);
+                $cgstRate = (float)($pricing['cgst_rate'] ?? 0);
+                $sgstRate = (float)($pricing['sgst_rate'] ?? 0);
+                $igstRate = (float)($pricing['igst_rate'] ?? 0);
+                $lineTotal = (float)($pricing['chargeable_value'] ?? round($lineTaxable + $lineTax, 2));
+            } else {
+                $unitPretax = pos_order_pretax_unit_price($order, 'disc');
+                $lineTaxable = $unitPretax * $qty;
+                $lineTax = ($lineTaxable * $gst) / 100;
+                $gstRates = invoice_gst_component_rates($gst, $useIgst);
+                $cgstRate = $gstRates['cgst_rate'];
+                $sgstRate = $gstRates['sgst_rate'];
+                $igstRate = $gstRates['igst_rate'];
+                $lineTotal = round($lineTaxable + $lineTax, 2);
+            }
 
+            $subtotal += $lineTaxable;
+            $taxAmount += $lineTax;
             $itemCurrency = $primaryCurrency;
 
             $lines[] = [
@@ -104,9 +142,9 @@ class InvoiceRequestBuilder
                 'quantity' => $qty,
                 'unit_price' => round($unitPretax, 4),
                 'tax_rate' => $gst,
-                'cgst_rate' => $gstRates['cgst_rate'],
-                'sgst_rate' => $gstRates['sgst_rate'],
-                'igst_rate' => $gstRates['igst_rate'],
+                'cgst_rate' => $cgstRate,
+                'sgst_rate' => $sgstRate,
+                'igst_rate' => $igstRate,
                 'box_no' => (string)($order['box_no'] ?? ''),
                 'currency' => $itemCurrency,
                 'image_url' => (string)($order['image'] ?? ''),
@@ -114,16 +152,39 @@ class InvoiceRequestBuilder
                 'size' => (string)($order['size'] ?? ''),
                 'color' => (string)($order['color'] ?? ''),
                 'vp_order_id' => (int)($order['id'] ?? 0),
-                'line_total' => round($amount + $taxAmount, 2),
+                'line_total' => $lineTotal,
             ];
         }
 
-        $subtotal = 0.0;
-        $taxAmount = 0.0;
-        foreach ($lines as $line) {
-            $amount = (float)$line['unit_price'] * (int)$line['quantity'];
-            $subtotal += $amount;
-            $taxAmount += ($amount * (float)$line['tax_rate']) / 100;
+        $calculatedSubtotal = round($subtotal, 2);
+        $calculatedTaxAmount = round($taxAmount, 2);
+        $calculatedTotalAmount = round($calculatedSubtotal + $calculatedTaxAmount, 2);
+
+        $defaultHeader = [
+            'invoice_date' => date('Y-m-d'),
+            'customer_id' => 0,
+            'vp_order_info_id' => 0,
+            'status' => 'final',
+            'subtotal' => $calculatedSubtotal,
+            'tax_amount' => $calculatedTaxAmount,
+            'discount_amount' => 0.0,
+            'total_amount' => $calculatedTotalAmount,
+            'currency' => $primaryCurrency,
+            'pos_flag' => (int)($options['pos_flag'] ?? 0),
+            'batch_no' => '',
+            'created_by' => (int)($options['created_by'] ?? ($_SESSION['user']['id'] ?? 0)),
+        ];
+
+        $header = array_merge($defaultHeader, $headerOverrides);
+
+        if (!isset($headerOverrides['subtotal'])) {
+            $header['subtotal'] = $calculatedSubtotal;
+        }
+        if (!isset($headerOverrides['tax_amount'])) {
+            $header['tax_amount'] = $calculatedTaxAmount;
+        }
+        if (!isset($headerOverrides['total_amount'])) {
+            $header['total_amount'] = round((float)$header['subtotal'] + (float)$header['tax_amount'], 2);
         }
 
         $orderNumbers = array_values(array_unique(array_filter(array_map(
@@ -133,20 +194,7 @@ class InvoiceRequestBuilder
 
         return [
             'source' => (string)($options['source'] ?? 'dispatch'),
-            'header' => array_merge([
-                'invoice_date' => date('Y-m-d'),
-                'customer_id' => 0,
-                'vp_order_info_id' => 0,
-                'status' => 'final',
-                'subtotal' => round($subtotal, 2),
-                'tax_amount' => round($taxAmount, 2),
-                'discount_amount' => 0.0,
-                'total_amount' => round($subtotal + $taxAmount, 2),
-                'currency' => $primaryCurrency,
-                'pos_flag' => (int)($options['pos_flag'] ?? 0),
-                'batch_no' => '',
-                'created_by' => (int)($options['created_by'] ?? ($_SESSION['user']['id'] ?? 0)),
-            ], $headerOverrides),
+            'header' => $header,
             'lines' => $lines,
             'discount_meta' => is_array($options['discount_meta'] ?? null) ? $options['discount_meta'] : null,
             'line_items_meta' => is_array($options['line_items_meta'] ?? null) ? $options['line_items_meta'] : [],
