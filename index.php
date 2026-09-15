@@ -758,6 +758,27 @@ switch ($page) {
                     $controller->generateAlankitIrnForInvoice($invoice_id);
                 }
                 break;
+            case 'create_bulk_background':
+                $controller->create_bulk_background();
+                break;
+            case 'batch_report':
+                $controller->batch_report();
+                break;
+            case 'batch_status_ajax':
+                $controller->batch_status_ajax();
+                break;
+            case 'process_batch_chunk':
+                $controller->process_batch_chunk();
+                break;
+            case 'download_batch_zip':
+                $controller->download_batch_zip();
+                break;
+            case 'export_batch_csv':
+                $controller->export_batch_csv();
+                break;
+            case 'retry_failed_batch_items':
+                $controller->retry_failed_batch_items();
+                break;
             case 'api_fetch_vouchers':
                 require_once 'controllers/OrdersAPIController.php';
                 $apiController = new OrdersAPIController($conn);

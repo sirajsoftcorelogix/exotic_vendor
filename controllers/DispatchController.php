@@ -2049,6 +2049,31 @@ class DispatchController {
             }
             $bulkImportLineIds = array_values(array_unique($bulkImportLineIds));
         }
+
+        $invoiceBatchId = (int)($_GET['invoice_batch_id'] ?? 0);
+        $invoiceBatchNo = trim((string)($_GET['invoice_batch_no'] ?? ''));
+        if ($invoiceBatchId > 0 || $invoiceBatchNo !== '') {
+            global $conn;
+            require_once __DIR__ . '/../models/invoice/BulkInvoiceBatch.php';
+            $bulkBatchModel = new BulkInvoiceBatch($conn);
+            $batch = $invoiceBatchId > 0 ? $bulkBatchModel->getBatchById($invoiceBatchId) : $bulkBatchModel->getBatchByNo($invoiceBatchNo);
+            if ($batch) {
+                $batchItems = $bulkBatchModel->getBatchItems((int)$batch['id']);
+                foreach ($batchItems as $bItem) {
+                    $itemIds = json_decode((string)($bItem['order_item_ids'] ?? '[]'), true);
+                    if (is_array($itemIds)) {
+                        foreach ($itemIds as $idVal) {
+                            $id = (int)$idVal;
+                            if ($id > 0) {
+                                $bulkImportLineIds[] = $id;
+                            }
+                        }
+                    }
+                }
+                $bulkImportLineIds = array_values(array_unique($bulkImportLineIds));
+            }
+        }
+
         $bulkImportCustomerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
 
         renderTemplate('views/dispatch/bulk_dispatch.php', [
