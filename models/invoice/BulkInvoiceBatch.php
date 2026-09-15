@@ -473,4 +473,96 @@ class BulkInvoiceBatch
 
         return $ok;
     }
+
+    public function getBatchesList(int $limit = 20, int $offset = 0, array $filters = []): array
+    {
+        $whereClauses = ["1=1"];
+        $params = [];
+        $types = "";
+
+        if (!empty($filters['batch_no'])) {
+            $whereClauses[] = "b.batch_no LIKE ?";
+            $params[] = '%' . trim((string)$filters['batch_no']) . '%';
+            $types .= "s";
+        }
+
+        if (!empty($filters['status'])) {
+            $whereClauses[] = "b.status = ?";
+            $params[] = trim((string)$filters['status']);
+            $types .= "s";
+        }
+
+        if (!empty($filters['date'])) {
+            $whereClauses[] = "DATE(b.created_at) = ?";
+            $params[] = trim((string)$filters['date']);
+            $types .= "s";
+        }
+
+        $whereSql = implode(" AND ", $whereClauses);
+        $sql = "SELECT b.*, u.name as creator_name 
+                FROM vp_invoice_bulk_batches b 
+                LEFT JOIN vp_users u ON b.created_by = u.id 
+                WHERE {$whereSql} 
+                ORDER BY b.id DESC LIMIT ? OFFSET ?";
+
+        $types .= "ii";
+        $params[] = $limit;
+        $params[] = $offset;
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return [];
+
+        $stmt->bind_param($types, ...$params);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $batches = [];
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $batches[] = $row;
+            }
+        }
+        $stmt->close();
+        return $batches;
+    }
+
+    public function countBatchesList(array $filters = []): int
+    {
+        $whereClauses = ["1=1"];
+        $params = [];
+        $types = "";
+
+        if (!empty($filters['batch_no'])) {
+            $whereClauses[] = "batch_no LIKE ?";
+            $params[] = '%' . trim((string)$filters['batch_no']) . '%';
+            $types .= "s";
+        }
+
+        if (!empty($filters['status'])) {
+            $whereClauses[] = "status = ?";
+            $params[] = trim((string)$filters['status']);
+            $types .= "s";
+        }
+
+        if (!empty($filters['date'])) {
+            $whereClauses[] = "DATE(created_at) = ?";
+            $params[] = trim((string)$filters['date']);
+            $types .= "s";
+        }
+
+        $whereSql = implode(" AND ", $whereClauses);
+        $sql = "SELECT COUNT(*) as cnt FROM vp_invoice_bulk_batches WHERE {$whereSql}";
+
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt) return 0;
+
+        if (!empty($params)) {
+            $stmt->bind_param($types, ...$params);
+        }
+
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+        return (int)($row['cnt'] ?? 0);
+    }
 }

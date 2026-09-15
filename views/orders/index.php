@@ -711,6 +711,7 @@
                     <a href="javascript:void(0)" id="action-add-to-purchase-list" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to purchase list</a>
                     <a href="javascript:void(0)" id="action-add-to-picklist" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Picklist</a>
                     <a href="javascript:void(0)" id="action-add-to-invoice" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Add to Invoice</a>
+                    <a href="<?= base_url('?page=invoices&action=batch_list') ?>" class="block px-4 py-2 text-sm text-amber-700 font-semibold hover:bg-amber-50">📦 View Bulk Batches</a>
                     <a href="javascript:void(0)" id="action-bulk-dispatch" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Bulk Dispatch & Export Excel</a>
                 </div>
             </div>
