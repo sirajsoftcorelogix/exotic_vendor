@@ -149,7 +149,8 @@ class BulkInvoiceBatch
      */
     public function lockNextPendingItem(int $batchId = 0): ?array
     {
-        $where = "(status = 'pending' OR (status = 'processing' AND processed_at IS NOT NULL AND processed_at < NOW() - INTERVAL 2 MINUTE))";
+        // 1. Try to lock a 'pending' item
+        $where = "status = 'pending'";
         $types = "";
         $params = [];
 
@@ -160,39 +161,69 @@ class BulkInvoiceBatch
         }
 
         $sql = "SELECT * FROM vp_invoice_bulk_batch_items WHERE {$where} ORDER BY id ASC LIMIT 1 FOR UPDATE";
-        
         $stmt = $this->db->prepare($sql);
-        if (!$stmt) return null;
-
-        if (!empty($params)) {
-            $stmt->bind_param($types, ...$params);
-        }
-
-        $stmt->execute();
-        $res = $stmt->get_result();
-        $row = $res ? $res->fetch_assoc() : null;
-        $stmt->close();
-
-        if ($row) {
-            // Mark item as processing with current processed_at timestamp
-            $up = $this->db->prepare("UPDATE vp_invoice_bulk_batch_items SET status = 'processing', processed_at = NOW() WHERE id = ?");
-            if ($up) {
-                $up->bind_param("i", $row['id']);
-                $up->execute();
-                $up->close();
+        if ($stmt) {
+            if (!empty($params)) {
+                $stmt->bind_param($types, ...$params);
             }
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $row = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
 
-            // Also mark main batch as processing & record start time if pending
-            $bId = (int)$row['batch_id'];
-            $bUp = $this->db->prepare("UPDATE vp_invoice_bulk_batches SET status = 'processing', started_at = COALESCE(started_at, NOW()) WHERE id = ? AND status = 'pending'");
-            if ($bUp) {
-                $bUp->bind_param("i", $bId);
-                $bUp->execute();
-                $bUp->close();
+            if ($row) {
+                $up = $this->db->prepare("UPDATE vp_invoice_bulk_batch_items SET status = 'processing', processed_at = NOW() WHERE id = ?");
+                if ($up) {
+                    $up->bind_param("i", $row['id']);
+                    $up->execute();
+                    $up->close();
+                }
+
+                $bId = (int)$row['batch_id'];
+                $bUp = $this->db->prepare("UPDATE vp_invoice_bulk_batches SET status = 'processing', started_at = COALESCE(started_at, NOW()) WHERE id = ? AND status = 'pending'");
+                if ($bUp) {
+                    $bUp->bind_param("i", $bId);
+                    $bUp->execute();
+                    $bUp->close();
+                }
+                return $row;
             }
         }
 
-        return $row ?: null;
+        // 2. If no pending item, pick up stuck 'processing' items (older than 10s or processed_at IS NULL)
+        $stuckWhere = "status = 'processing' AND (processed_at IS NULL OR processed_at < NOW() - INTERVAL 10 SECOND)";
+        $stuckParams = [];
+        $stuckTypes = "";
+
+        if ($batchId > 0) {
+            $stuckWhere .= " AND batch_id = ?";
+            $stuckTypes .= "i";
+            $stuckParams[] = $batchId;
+        }
+
+        $stuckSql = "SELECT * FROM vp_invoice_bulk_batch_items WHERE {$stuckWhere} ORDER BY id ASC LIMIT 1 FOR UPDATE";
+        $stuckStmt = $this->db->prepare($stuckSql);
+        if ($stuckStmt) {
+            if (!empty($stuckParams)) {
+                $stuckStmt->bind_param($stuckTypes, ...$stuckParams);
+            }
+            $stuckStmt->execute();
+            $stuckRes = $stuckStmt->get_result();
+            $stuckRow = $stuckRes ? $stuckRes->fetch_assoc() : null;
+            $stuckStmt->close();
+
+            if ($stuckRow) {
+                $up = $this->db->prepare("UPDATE vp_invoice_bulk_batch_items SET processed_at = NOW() WHERE id = ?");
+                if ($up) {
+                    $up->bind_param("i", $stuckRow['id']);
+                    $up->execute();
+                    $up->close();
+                }
+                return $stuckRow;
+            }
+        }
+
+        return null;
     }
 
     /**
