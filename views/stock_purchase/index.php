@@ -149,12 +149,16 @@
     </div>
     <!-- End of Advance Search Accordion -->
     <!-- </div> -->
-    <!-- custom po button -->
+    <!-- custom po and import buttons -->
     <div class="flex items-center justify-between mb-4">
-        <div class=" justify-left">
+        <div class="flex items-center gap-3 justify-left">
             <a href="<?php echo base_url('?page=purchase_orders&action=custom_po'); ?>" class="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm flex items-center gap-2">
                 <i class="fa fa-plus"></i>
                 <span> Custom PO</span>
+            </a>
+            <a href="<?php echo base_url('?page=purchase_orders&action=import_csv'); ?>" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm flex items-center gap-2">
+                <i class="fa-solid fa-file-import"></i>
+                <span> Import POs (CSV/Excel)</span>
             </a>
         </div>
         <!-- <div class="justify-end">

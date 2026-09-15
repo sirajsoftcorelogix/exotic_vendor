@@ -292,38 +292,87 @@ function exportBatchToShiprocketExcel(array $exportRows, string $filename = 'shi
     ensure_vendor_autoloader();
 
     $headers = [
-		'Order ID',
-		'Order Date',
-		'Channel',
-		'Payment Method',
-		// Customer/Billing fields from Excel matching your data
-		'Billing First Name',       // Maps to *CUSTOMER FIRST NAME
-		'Billing Last Name',        // Maps to *CUSTOMER LAST NAME
-		'Billing Email',            // Maps to *EMAIL
-		'Billing Phone',            // Maps to *CUSTOMER MOBILE
-		'Shipping Address Line 1',  // Maps to SHIPPING ADDRESS LINE 1
-		'Shipping Address Line 2',  // Maps to *SHIPPING ADDRESS LINE 2
-		'Shipping Country',         // Maps to *SHIPPING ADDRESS COUNTRY
-		'Shipping State',           // Maps to *SHIPPING ADDRESS STATE
-		'Shipping City',            // Maps to *SHIPPING ADDRESS CITY
-		'Shipping Pincode',         // Maps to *SHIPPING ADDRESS POSTCODE
-		'Billing Address Line 1',   // Maps to BILLING ADDRESS LINE 1
-		'Billing Address Line 2',   // Maps to BILLING ADDRESS LINE 2
-		'Billing Country',          // Maps to BILLING ADDRESS COUNTRY
-		'Billing State',            // Maps to BILLING ADDRESS STATE
-		'Billing City',             // Maps to BILLING ADDRESS CITY
-		'Billing Pincode',          // Maps to BILLING ADDRESS POSTCODE
-		'Product SKU',              // Maps to *MASTER SKU (Product SKU)
-		'Product Name',             // Maps to *PRODUCT NAME
-		'Quantity',                 // Maps to *PRODUCT QUANTITY
-		'Tax Rate (%)',             // Maps to TAX %
-		'Unit Price',               // Maps to *SELLING PRICE (PER UNIT ITEM, INCLUSIVE OF TAX)
-		'Discount Amount',          // Maps to DISCOUNT (PER UNIT ITEM)
-		'Package Length (cm)',      // Maps to *LENGTH (CM)
-		'Package Width (cm)',       // Maps to *BREADTH (CM)
-		'Package Height (cm)',      // Maps to *HEIGHT (CM)
-		'Package Weight (kg)'       // Maps to WEIGHT OF SHIPMENT (KG)
-	];
+        '*Order ID',
+        'Order Date',
+        'Channel',
+        '*Order Type',
+        '*Pickup Location Name',
+        '*Customer First Name',
+        'Customer Last Name',
+        '*Email',
+        '*Customer Mobile',
+        'Alternate Phone Number',
+        '*Shipping Address Line 1',
+        'Shipping Address Line 2',
+        '*Shipping Address Country',
+        '*Shipping Address State',
+        '*Shipping Address City',
+        '*Shipping Address Postcode',
+        'Billing Address Line 1',
+        'Billing Address Line 2',
+        'Billing Address Country',
+        'Billing Address State',
+        'Billing Address City',
+        'Billing Address Postcode',
+        '*Master SKU',
+        '*Product Name',
+        '*Product Quantity',
+        'Tax %',
+        '*Selling Price',
+        'Discount',
+        '*Length (cm)',
+        '*Breadth (cm)',
+        '*Height (cm)',
+        '*Weight (kg)'
+    ];
+
+    $rowsData = [];
+    foreach ($exportRows as $row) {
+        $isCod = strtoupper((string)($row['payment_mode'] ?? '')) === 'COD';
+        $firstName = (string)($row['shipping_first_name'] ?? $row['customer_name'] ?? 'Customer');
+        $lastName = (string)($row['shipping_last_name'] ?? '');
+
+        $rowMap = [
+            '*Order ID'                  => (string)($row['order_number'] ?? ''),
+            'Order Date'                 => (string)($row['invoice_date'] ?? date('Y-m-d')),
+            'Channel'                    => 'Custom',
+            '*Order Type'                => $isCod ? 'COD' : 'Prepaid',
+            '*Pickup Location Name'      => 'Head Off',
+            '*Customer First Name'       => $firstName,
+            'Customer Last Name'        => $lastName,
+            '*Email'                     => (string)($row['email'] ?? ''),
+            '*Customer Mobile'           => (string)($row['phone'] ?? ''),
+            'Alternate Phone Number'     => '',
+            '*Shipping Address Line 1'   => (string)($row['address1'] ?? ''),
+            'Shipping Address Line 2'   => (string)($row['address2'] ?? ''),
+            '*Shipping Address Country'  => (string)($row['country'] ?? 'India'),
+            '*Shipping Address State'    => (string)($row['state'] ?? ''),
+            '*Shipping Address City'     => (string)($row['city'] ?? ''),
+            '*Shipping Address Postcode' => (string)($row['zipcode'] ?? ''),
+            'Billing Address Line 1'    => (string)($row['address1'] ?? ''),
+            'Billing Address Line 2'    => (string)($row['address2'] ?? ''),
+            'Billing Address Country'   => (string)($row['country'] ?? 'India'),
+            'Billing Address State'     => (string)($row['state'] ?? ''),
+            'Billing Address City'      => (string)($row['city'] ?? ''),
+            'Billing Address Postcode'  => (string)($row['zipcode'] ?? ''),
+            '*Master SKU'                => (string)($row['item_code'] ?? ''),
+            '*Product Name'              => (string)($row['title'] ?? ''),
+            '*Product Quantity'          => (int)($row['quantity'] ?? 1),
+            'Tax %'                      => number_format((float)($row['gst_rate'] ?? 0), 2, '.', ''),
+            '*Selling Price'             => number_format((float)($row['unit_price'] ?? 0), 2, '.', ''),
+            'Discount'                   => '0.00',
+            '*Length (cm)'               => '22',
+            '*Breadth (cm)'              => '17',
+            '*Height (cm)'               => '5',
+            '*Weight (kg)'               => number_format((float)($row['weight'] ?? 0.50), 2, '.', ''),
+        ];
+
+        $lineData = [];
+        foreach ($headers as $h) {
+            $lineData[] = $rowMap[$h] ?? '';
+        }
+        $rowsData[] = $lineData;
+    }
 
     if (!class_exists('\PhpOffice\PhpSpreadsheet\Spreadsheet')) {
         if (ob_get_length()) ob_end_clean();
@@ -333,45 +382,8 @@ function exportBatchToShiprocketExcel(array $exportRows, string $filename = 'shi
         $out = fopen('php://output', 'w');
         fputcsv($out, $headers);
 
-        foreach ($exportRows as $row) {
-            $isCod = strtoupper((string)($row['payment_mode'] ?? '')) === 'COD';
-
-            fputcsv($out, [
-                (string)($row['order_number'] ?? ''),
-                (string)($row['invoice_date'] ?? date('Y-m-d')),
-                'Custom',
-                $isCod ? 'COD' : 'Prepaid',
-                (string)($row['shipping_first_name'] ?? $row['customer_name'] ?? ''),
-                (string)($row['shipping_last_name'] ?? ''),
-                (string)($row['address1'] ?? ''),
-                (string)($row['address2'] ?? ''),
-                (string)($row['city'] ?? ''),
-                (string)($row['state'] ?? ''),
-                (string)($row['zipcode'] ?? ''),
-                (string)($row['country'] ?? 'India'),
-                (string)($row['email'] ?? ''),
-                (string)($row['phone'] ?? ''),
-                (string)($row['shipping_first_name'] ?? $row['customer_name'] ?? ''),
-                (string)($row['shipping_last_name'] ?? ''),
-                (string)($row['address1'] ?? ''),
-                (string)($row['address2'] ?? ''),
-                (string)($row['city'] ?? ''),
-                (string)($row['state'] ?? ''),
-                (string)($row['zipcode'] ?? ''),
-                (string)($row['country'] ?? 'India'),
-                (string)($row['email'] ?? ''),
-                (string)($row['phone'] ?? ''),
-                (string)($row['title'] ?? ''),
-                (string)($row['item_code'] ?? ''),
-                (int)($row['quantity'] ?? 1),
-                number_format((float)($row['unit_price'] ?? 0), 2, '.', ''),
-                number_format((float)($row['gst_rate'] ?? 0), 2, '.', ''),
-                '0.00',
-                '0.50',
-                '22',
-                '17',
-                '5',
-            ]);
+        foreach ($rowsData as $dataRow) {
+            fputcsv($out, $dataRow);
         }
         fclose($out);
         exit;
@@ -395,47 +407,8 @@ function exportBatchToShiprocketExcel(array $exportRows, string $filename = 'shi
     $sheet->getRowDimension(1)->setRowHeight(28);
 
     $rowIndex = 2;
-    foreach ($exportRows as $row) {
-        $isCod = strtoupper((string)($row['payment_mode'] ?? '')) === 'COD';
-
-        $data = [
-            (string)($row['order_number'] ?? ''),
-            (string)($row['invoice_date'] ?? date('Y-m-d')),
-            'Custom',
-            $isCod ? 'COD' : 'Prepaid',
-            (string)($row['shipping_first_name'] ?? $row['customer_name'] ?? ''),
-            (string)($row['shipping_last_name'] ?? ''),
-            (string)($row['address1'] ?? ''),
-            (string)($row['address2'] ?? ''),
-            (string)($row['city'] ?? ''),
-            (string)($row['state'] ?? ''),
-            (string)($row['zipcode'] ?? ''),
-            (string)($row['country'] ?? 'India'),
-            (string)($row['email'] ?? ''),
-            (string)($row['phone'] ?? ''),
-            (string)($row['shipping_first_name'] ?? $row['customer_name'] ?? ''),
-            (string)($row['shipping_last_name'] ?? ''),
-            (string)($row['address1'] ?? ''),
-            (string)($row['address2'] ?? ''),
-            (string)($row['city'] ?? ''),
-            (string)($row['state'] ?? ''),
-            (string)($row['zipcode'] ?? ''),
-            (string)($row['country'] ?? 'India'),
-            (string)($row['email'] ?? ''),
-            (string)($row['phone'] ?? ''),
-            (string)($row['title'] ?? ''),
-            (string)($row['item_code'] ?? ''),
-            (int)($row['quantity'] ?? 1),
-            number_format((float)($row['unit_price'] ?? 0), 2, '.', ''),
-            number_format((float)($row['gst_rate'] ?? 0), 2, '.', ''),
-            '0.00',
-            '0.50',
-            '22',
-            '17',
-            '5',
-        ];
-
-        $sheet->fromArray([$data], null, 'A' . $rowIndex);
+    foreach ($rowsData as $dataRow) {
+        $sheet->fromArray([$dataRow], null, 'A' . $rowIndex);
         $sheet->getRowDimension($rowIndex)->setRowHeight(20);
         $rowIndex++;
     }

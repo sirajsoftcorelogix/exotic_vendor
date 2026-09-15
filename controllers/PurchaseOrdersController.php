@@ -2032,4 +2032,212 @@ class PurchaseOrdersController
         echo json_encode(['success' => true, 'message' => 'Custom Purchase Order created successfully.', 'po_id' => $poId, 'item_ids' => $itemsCreated]);
         exit;
     }
+
+    public function importCSV()
+    {
+        is_login();
+        renderTemplate('views/purchase_orders/import_csv.php', [], 'Import Purchase Orders (CSV/Excel)');
+    }
+
+    public function importCSVPost()
+    {
+        is_login();
+        global $purchaseOrdersModel;
+
+        $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+
+        if (empty($_FILES['import_file']['tmp_name']) || !is_uploaded_file($_FILES['import_file']['tmp_name'])) {
+            $res = ['success' => false, 'message' => 'Please select a valid CSV or Excel file to upload.'];
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode($res);
+                exit;
+            } else {
+                renderTemplate('views/purchase_orders/import_csv.php', ['result' => $res], 'Import Purchase Orders');
+                return;
+            }
+        }
+
+        $tmpFile = $_FILES['import_file']['tmp_name'];
+        $fileName = $_FILES['import_file']['name'] ?? '';
+        $ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+
+        $rows = [];
+
+        try {
+            if (class_exists('PhpOffice\PhpSpreadsheet\IOFactory')) {
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($tmpFile);
+                $worksheet = $spreadsheet->getActiveSheet();
+                $rawSheetData = $worksheet->toArray(null, true, true, true);
+
+                if (!empty($rawSheetData)) {
+                    $headerRow = array_shift($rawSheetData);
+                    foreach ($rawSheetData as $r) {
+                        $rowMap = [];
+                        $hasVal = false;
+                        foreach ($r as $colLetter => $val) {
+                            $colHeader = trim((string)($headerRow[$colLetter] ?? ''));
+                            $cellVal = trim((string)($val ?? ''));
+                            if ($colHeader !== '') {
+                                $rowMap[$colHeader] = $cellVal;
+                            } else {
+                                $rowMap['col_' . $colLetter] = $cellVal;
+                            }
+                            if ($cellVal !== '') {
+                                $hasVal = true;
+                            }
+                        }
+                        if ($hasVal) {
+                            $rows[] = $rowMap;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Fallback for CSV files
+            if (($handle = fopen($tmpFile, 'r')) !== false) {
+                $headerRow = fgetcsv($handle);
+                if ($headerRow) {
+                    while (($data = fgetcsv($handle)) !== false) {
+                        $rowMap = [];
+                        foreach ($data as $idx => $val) {
+                            $colHeader = trim((string)($headerRow[$idx] ?? 'col_' . $idx));
+                            $rowMap[$colHeader] = trim((string)$val);
+                        }
+                        $rows[] = $rowMap;
+                    }
+                }
+                fclose($handle);
+            }
+        }
+
+        if (empty($rows) && in_array($ext, ['csv', 'txt'])) {
+            if (($handle = fopen($tmpFile, 'r')) !== false) {
+                $headerRow = fgetcsv($handle);
+                if ($headerRow) {
+                    while (($data = fgetcsv($handle)) !== false) {
+                        $rowMap = [];
+                        foreach ($data as $idx => $val) {
+                            $colHeader = trim((string)($headerRow[$idx] ?? 'col_' . $idx));
+                            $rowMap[$colHeader] = trim((string)$val);
+                        }
+                        $rows[] = $rowMap;
+                    }
+                }
+                fclose($handle);
+            }
+        }
+
+        if (empty($rows)) {
+            $res = ['success' => false, 'message' => 'Failed to parse file or file is empty. Please verify file content.'];
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode($res);
+                exit;
+            } else {
+                renderTemplate('views/purchase_orders/import_csv.php', ['result' => $res], 'Import Purchase Orders');
+                return;
+            }
+        }
+
+        $userId = (int)($_SESSION['user']['id'] ?? 0);
+        $result = $purchaseOrdersModel->importPurchaseOrdersFromData($rows, $userId);
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode($result);
+            exit;
+        } else {
+            renderTemplate('views/purchase_orders/import_csv.php', ['result' => $result], 'Import Purchase Orders');
+        }
+    }
+
+    public function downloadSampleImportTemplate()
+    {
+        is_login();
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename=purchase_orders_import_sample.csv');
+
+        $output = fopen('php://output', 'w');
+
+        // Header columns (Updated per specification: Vendor Code included, Title & GST omitted/optional, Warehouse Code used)
+        fputcsv($output, [
+            'PO Number',
+            'Vendor Code',
+            'Vendor Name',
+            'PO Date',
+            'Expected Delivery Date',
+            'Status',
+            'Item Code',
+            'SKU',
+            'Quantity',
+            'Unit Price',
+            'Size',
+            'Color',
+            'Warehouse Code',
+            'Shipping Cost',
+            'Notes'
+        ]);
+
+        // Sample Row 1 - PO 1 (Line 1)
+        fputcsv($output, [
+            'PO-OLD-1001',
+            'VEND-101',
+            'Exotic Handicrafts Ltd',
+            date('Y-m-d'),
+            date('Y-m-d', strtotime('+10 days')),
+            'completed',
+            'STATUE-001',
+            'SKU-STATUE-001-M',
+            '5',
+            '1200.00',
+            'Medium',
+            'Gold',
+            'WH-DELHI-01',
+            '150.00',
+            'Legacy purchase order imported from old software'
+        ]);
+
+        // Sample Row 2 - PO 1 (Line 2)
+        fputcsv($output, [
+            'PO-OLD-1001',
+            'VEND-101',
+            'Exotic Handicrafts Ltd',
+            date('Y-m-d'),
+            date('Y-m-d', strtotime('+10 days')),
+            'completed',
+            'STATUE-002',
+            'SKU-STATUE-002-L',
+            '3',
+            '2500.00',
+            'Large',
+            'Antique',
+            'WH-DELHI-01',
+            '150.00',
+            'Legacy purchase order imported from old software'
+        ]);
+
+        // Sample Row 3 - PO 2
+        fputcsv($output, [
+            'PO-OLD-1002',
+            'VEND-102',
+            'Silk & Crafts Co',
+            date('Y-m-d', strtotime('-5 days')),
+            date('Y-m-d', strtotime('+5 days')),
+            'ordered',
+            'SILK-SAR-101',
+            'SKU-SILK-SAR-RED',
+            '10',
+            '4500.00',
+            'Free Size',
+            'Red',
+            'WH-MUMBAI-02',
+            '200.00',
+            'Urgent stock replenishment'
+        ]);
+
+        fclose($output);
+        exit;
+    }
 }
