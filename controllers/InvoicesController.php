@@ -2560,28 +2560,38 @@ class InvoicesController
     public function process_batch_chunk(): void
     {
         is_login();
-        global $conn;
+        global $conn, $ordersModel, $invoiceModel, $commanModel;
 
         header('Content-Type: application/json; charset=utf-8');
         $batchId = (int)($_GET['batch_id'] ?? $_POST['batch_id'] ?? 0);
 
-        require_once __DIR__ . '/../models/invoice/BulkInvoiceBatch.php';
-        $bulkBatchModel = new BulkInvoiceBatch($conn);
-
-        $item = $bulkBatchModel->lockNextPendingItem($batchId);
-        if (!$item) {
-            $batch = $bulkBatchModel->getBatchById($batchId);
-            echo json_encode([
-                'success' => true,
-                'completed' => true,
-                'message' => 'No more pending items in queue.',
-                'batch' => $batch,
-            ]);
+        if ($batchId <= 0) {
+            echo json_encode(['success' => false, 'completed' => true, 'message' => 'Invalid batch ID']);
             exit;
         }
 
-        // Process this 1 item inline
-        require_once __DIR__ . '/../scripts/process_bulk_invoice_queue.php';
+        require_once __DIR__ . '/../models/invoice/BulkInvoiceBatch.php';
+        require_once __DIR__ . '/../helpers/invoice/InvoiceCreationService.php';
+
+        $bulkBatchModel = new BulkInvoiceBatch($conn);
+        $creationService = new InvoiceCreationService($conn, $invoiceModel, $ordersModel, $commanModel);
+
+        $result = $bulkBatchModel->processNextPendingItem($batchId, $creationService, $ordersModel);
+
+        $bulkBatchModel->updateBatchTotals($batchId);
+        $batch = $bulkBatchModel->getBatchById($batchId);
+        $items = $bulkBatchModel->getBatchItems($batchId);
+
+        $isCompleted = ($result === null) || ($batch && ($batch['status'] !== 'pending' && $batch['status'] !== 'processing'));
+
+        echo json_encode([
+            'success' => true,
+            'processed_item' => $result,
+            'completed' => $isCompleted,
+            'message' => ($result === null ? 'No more pending items in queue.' : 'Processed item.'),
+            'batch' => $batch,
+            'items' => $items,
+        ]);
         exit;
     }
 

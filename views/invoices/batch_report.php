@@ -219,7 +219,8 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
                 if (!data) return;
                 if (data.success && data.batch) {
                     updateUI(data.batch, data.items || []);
-                    if (data.batch.status === 'completed' || data.batch.status === 'failed' || data.batch.status === 'partially_completed') {
+                    const st = (data.batch.status || '').toLowerCase();
+                    if (data.completed || st === 'completed' || st === 'failed' || st === 'partially_completed') {
                         isFinished = true;
                         const spinner = document.getElementById('processingSpinner');
                         if (spinner) spinner.classList.add('hidden');
