@@ -25,12 +25,12 @@ function fetchBatchDispatchRows(mysqli $conn, int $batchId): array
     require_once __DIR__ . '/../../models/invoice/BulkInvoiceBatch.php';
     require_once __DIR__ . '/../../models/order/order.php';
     require_once __DIR__ . '/../../models/invoice/invoice.php';
-    require_once __DIR__ . '/../../models/comman/comman.php';
+    require_once __DIR__ . '/../../models/comman/tables.php';
 
     $bulkBatchModel = new BulkInvoiceBatch($conn);
     $ordersModel = new Order($conn);
     $invoiceModel = new Invoice($conn);
-    $commanModel = new Comman($conn);
+    $commanModel = new Tables($conn);
 
     $batch = $bulkBatchModel->getBatchById($batchId);
     if (!$batch) {
