@@ -133,7 +133,17 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
                             ][$itemStat] ?? 'bg-gray-100 text-gray-700';
 
                             $orderNos = json_decode((string)($row['order_numbers'] ?? '[]'), true);
-                            $orderNoStr = is_array($orderNos) ? implode(', ', $orderNos) : '-';
+                            $orderLinks = [];
+                            if (is_array($orderNos)) {
+                                foreach ($orderNos as $num) {
+                                    $numStr = trim((string)$num);
+                                    if ($numStr !== '') {
+                                        $orderUrl = base_url('?page=posorders&action=get_order_details_html&type=outer&order_number=' . rawurlencode($numStr));
+                                        $orderLinks[] = '<a href="' . htmlspecialchars($orderUrl, ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-semibold font-mono">' . htmlspecialchars($numStr) . '</a>';
+                                    }
+                                }
+                            }
+                            $orderLinksHtml = count($orderLinks) > 0 ? implode(', ', $orderLinks) : '-';
                             $invId = (int)($row['invoice_id'] ?? 0);
                             $invNo = htmlspecialchars((string)($row['invoice_number'] ?? ''));
                         ?>
@@ -142,8 +152,8 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
                                     <?= htmlspecialchars((string)($row['customer_name'] ?? ('Customer #' . $row['customer_id']))) ?>
                                     <span class="block text-xs font-normal text-gray-400">ID: #<?= (int)$row['customer_id'] ?></span>
                                 </td>
-                                <td class="px-6 py-4 text-gray-700">
-                                    <span class="font-mono text-xs bg-gray-100 px-2 py-1 rounded"><?= htmlspecialchars($orderNoStr) ?></span>
+                                <td class="px-6 py-4 text-gray-700 text-xs">
+                                    <?= $orderLinksHtml ?>
                                 </td>
                                 <td class="px-6 py-4">
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold <?= $itemBadgeClass ?>">
@@ -295,7 +305,18 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
                 } catch(e) {
                     orderNos = [];
                 }
-                const orderNoStr = Array.isArray(orderNos) && orderNos.length > 0 ? orderNos.join(', ') : '-';
+                let orderLinksHtml = '-';
+                if (Array.isArray(orderNos) && orderNos.length > 0) {
+                    const links = orderNos.map(num => {
+                        const numStr = String(num).trim();
+                        if (!numStr) return '';
+                        const url = `index.php?page=posorders&action=get_order_details_html&type=outer&order_number=${encodeURIComponent(numStr)}`;
+                        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-semibold font-mono">${escapeHtml(numStr)}</a>`;
+                    }).filter(Boolean);
+                    if (links.length > 0) {
+                        orderLinksHtml = links.join(', ');
+                    }
+                }
                 const invId = parseInt(row.invoice_id, 10) || 0;
                 const invNo = escapeHtml(row.invoice_number || '');
                 const amount = parseFloat(row.invoice_amount || 0);
@@ -319,8 +340,8 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
                         ${escapeHtml(row.customer_name || ('Customer #' + row.customer_id))}
                         <span class="block text-xs font-normal text-gray-400">ID: #${row.customer_id}</span>
                     </td>
-                    <td class="px-6 py-4 text-gray-700">
-                        <span class="font-mono text-xs bg-gray-100 px-2 py-1 rounded">${escapeHtml(orderNoStr)}</span>
+                    <td class="px-6 py-4 text-gray-700 text-xs">
+                        ${orderLinksHtml}
                     </td>
                     <td class="px-6 py-4">
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${badgeClass}">
