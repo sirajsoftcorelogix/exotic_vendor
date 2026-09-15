@@ -274,6 +274,29 @@ function bluedartBulkExcelStreamDownload(array $sheets, string $filename): void
         throw new RuntimeException('No Blue Dart sheets to export.');
     }
 
+    $headers = bluedartBulkExcelColumnHeaders();
+
+    if (!class_exists('\PhpOffice\PhpSpreadsheet\Spreadsheet')) {
+        while (ob_get_level() > 0) ob_end_clean();
+        $csvFilename = str_replace('.xlsx', '.csv', $filename);
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . rawurlencode($csvFilename) . '"');
+        $out = fopen('php://output', 'w');
+        fputcsv($out, array_merge(['SheetName'], $headers));
+
+        foreach ($sheets as $sheetName => $rows) {
+            foreach ($rows as $row) {
+                $line = [$sheetName];
+                foreach ($headers as $header) {
+                    $line[] = $row[$header] ?? '';
+                }
+                fputcsv($out, $line);
+            }
+        }
+        fclose($out);
+        exit;
+    }
+
     $spreadsheet = new Spreadsheet();
     $headers = bluedartBulkExcelColumnHeaders();
     $sheetIndex = 0;
