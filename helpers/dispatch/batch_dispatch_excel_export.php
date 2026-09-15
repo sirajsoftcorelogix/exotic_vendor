@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../../vendor/autoload.php';
+$vendorAutoload = dirname(__DIR__, 2) . '/vendor/autoload.php';
+if (file_exists($vendorAutoload)) {
+    require_once $vendorAutoload;
+}
 require_once __DIR__ . '/bulk_dispatch_excel_export.php';
 require_once __DIR__ . '/bluedart_bulk_excel_export.php';
 
