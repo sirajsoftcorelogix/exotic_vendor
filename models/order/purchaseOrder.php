@@ -310,7 +310,7 @@ class PurchaseOrder {
             if ($poId === 0) {
                 $insSql = "INSERT INTO purchase_orders 
                     (po_number, po_type, vendor_id, user_id, po_date, expected_delivery_date, delivery_address, notes, terms_and_conditions, subtotal, total_gst, shipping_cost, total_cost, status) 
-                    VALUES (?, 'stock', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    VALUES (?, 'custom', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                 
                 $dummyPoNum = $finalPoNumber !== '' ? $finalPoNumber : 'TEMP-' . uniqid();
                 $expectedDate = $poData['expected_delivery_date'] !== '' ? $poData['expected_delivery_date'] : null;
