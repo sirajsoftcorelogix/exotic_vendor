@@ -537,6 +537,15 @@ switch ($page) {
             case 'remote_vendor_search':
                 $controller->remoteVendorSearch();
                 break;
+            case 'import_csv':
+                $controller->importCSV();
+                break;
+            case 'import_csv_post':
+                $controller->importCSVPost();
+                break;
+            case 'download_import_sample':
+                $controller->downloadSampleImportTemplate();
+                break;
             default:
                 $controller->index();
                 break;

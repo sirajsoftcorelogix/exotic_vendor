@@ -111,6 +111,467 @@ class PurchaseOrder {
         }
         return false; // Return false on failure
     }
+    /**
+     * Import Purchase Orders from structured CSV/Excel array rows.
+     *
+     * @param array $rows Parsed associative array or numeric array from CSV/Excel file
+     * @param int $currentUserId ID of user performing import
+     * @return array Summary of import operation
+     */
+    public function importPurchaseOrdersFromData(array $rows, int $currentUserId = 0): array {
+        if (empty($rows)) {
+            return [
+                'success' => false,
+                'message' => 'No data rows found in file.',
+                'imported_pos' => 0,
+                'imported_items' => 0,
+                'errors' => ['File contains no readable data rows.'],
+                'details' => []
+            ];
+        }
+
+        // 1. Identify Header Row & Normalize Mapping
+        $headers = [];
+        $dataRows = [];
+
+        // Check if first row is associative or contains header titles
+        $firstRow = reset($rows);
+        $isAssociative = is_array($firstRow) && !isset($firstRow[0]);
+
+        if (!$isAssociative) {
+            // First array element is header row
+            $headerRow = array_shift($rows);
+            foreach ($headerRow as $colIdx => $colName) {
+                $headers[$colIdx] = $this->normalizeImportColumnName((string)$colName);
+            }
+            foreach ($rows as $rIdx => $rawRow) {
+                $mappedRow = [];
+                foreach ($rawRow as $cIdx => $val) {
+                    $key = $headers[$cIdx] ?? 'col_' . $cIdx;
+                    $mappedRow[$key] = trim((string)$val);
+                }
+                $dataRows[] = $mappedRow;
+            }
+        } else {
+            // Already associative array
+            foreach ($rows as $rawRow) {
+                $mappedRow = [];
+                foreach ($rawRow as $key => $val) {
+                    $normKey = $this->normalizeImportColumnName((string)$key);
+                    $mappedRow[$normKey] = trim((string)$val);
+                }
+                $dataRows[] = $mappedRow;
+            }
+        }
+
+        if (empty($dataRows)) {
+            return [
+                'success' => false,
+                'message' => 'No valid data rows after parsing.',
+                'imported_pos' => 0,
+                'imported_items' => 0,
+                'errors' => ['No valid data rows found after header mapping.'],
+                'details' => []
+            ];
+        }
+
+        // 2. Group Rows by PO Key (po_number or vendor_name + po_date combination)
+        $poGroups = [];
+        $rowNum = 1;
+
+        foreach ($dataRows as $row) {
+            $rowNum++;
+            $poNumber = trim((string)($row['po_number'] ?? ''));
+            $vendorCode = trim((string)($row['vendor_code'] ?? ''));
+            $vendorName = trim((string)($row['vendor_name'] ?? $row['vendor'] ?? ''));
+            $poDate = $this->parseImportDate($row['po_date'] ?? '');
+            $warehouseCode = trim((string)($row['delivery_address'] ?? $row['warehouse_code'] ?? $row['warehouse'] ?? $row['address'] ?? ''));
+
+            // Determine unique group key
+            if ($poNumber !== '') {
+                $groupKey = 'PO_NUM_' . strtoupper($poNumber);
+            } elseif ($vendorCode !== '' || $vendorName !== '') {
+                $vKey = $vendorCode !== '' ? $vendorCode : $vendorName;
+                $groupKey = 'PO_VEND_' . strtoupper(preg_replace('/[^a-z0-9]/i', '_', $vKey)) . '_' . ($poDate ?: date('Y-m-d'));
+            } else {
+                $groupKey = 'PO_ROW_' . $rowNum;
+            }
+
+            if (!isset($poGroups[$groupKey])) {
+                $poGroups[$groupKey] = [
+                    'group_key' => $groupKey,
+                    'po_number' => $poNumber,
+                    'vendor_name' => $vendorName,
+                    'vendor_code' => $vendorCode,
+                    'po_date' => $poDate ?: date('Y-m-d'),
+                    'expected_delivery_date' => $this->parseImportDate($row['expected_delivery_date'] ?? $row['due_date'] ?? ''),
+                    'status' => $this->normalizePoStatus($row['status'] ?? 'pending'),
+                    'delivery_address' => $warehouseCode,
+                    'notes' => trim((string)($row['notes'] ?? '')),
+                    'terms_and_conditions' => trim((string)($row['terms_and_conditions'] ?? $row['terms'] ?? '')),
+                    'shipping_cost' => (float)str_replace(',', '', $row['shipping_cost'] ?? '0'),
+                    'items' => [],
+                    'source_rows' => []
+                ];
+            }
+
+            // Extract Item Details
+            $qty = (float)str_replace(',', '', $row['quantity'] ?? $row['qty'] ?? '0');
+            $price = (float)str_replace(',', '', $row['price'] ?? $row['rate'] ?? $row['unit_price'] ?? '0');
+            $gst = (float)str_replace(',', '', $row['gst'] ?? $row['gst_percent'] ?? '0');
+            $itemCode = trim((string)($row['item_code'] ?? $row['item_no'] ?? ''));
+            $sku = trim((string)($row['sku'] ?? ''));
+            $title = trim((string)($row['title'] ?? $row['item_title'] ?? $row['description'] ?? ''));
+
+            // Skip empty item lines (Item Title & GST are optional)
+            if ($qty <= 0 && $price <= 0 && $itemCode === '' && $sku === '') {
+                continue;
+            }
+
+            // Item Title is optional; fallback to Item Code, SKU, or default
+            if ($title === '') {
+                $title = $itemCode !== '' ? $itemCode : ($sku !== '' ? $sku : 'PO Item');
+            }
+
+            $poGroups[$groupKey]['items'][] = [
+                'order_number' => trim((string)($row['order_number'] ?? '')),
+                'item_code' => $itemCode,
+                'sku' => $sku,
+                'title' => $title,
+                'hsn' => trim((string)($row['hsn'] ?? '')),
+                'quantity' => $qty > 0 ? $qty : 1.0,
+                'price' => $price,
+                'gst' => $gst,
+                'size' => trim((string)($row['size'] ?? '')),
+                'color' => trim((string)($row['color'] ?? '')),
+                'image' => trim((string)($row['image'] ?? ''))
+            ];
+
+            $poGroups[$groupKey]['source_rows'][] = $rowNum;
+        }
+
+        // 3. Process each PO Group into Database
+        $totalPosImported = 0;
+        $totalItemsImported = 0;
+        $skippedPos = 0;
+        $errors = [];
+        $importedDetails = [];
+
+        foreach ($poGroups as $groupKey => $poData) {
+            if (empty($poData['items'])) {
+                $skippedPos++;
+                $errors[] = "Group {$groupKey}: No valid item lines found.";
+                continue;
+            }
+
+            // A. Resolve Vendor
+            $vendorId = $this->resolveVendorForImport($poData['vendor_name'], $poData['vendor_code'], $currentUserId);
+            if (!$vendorId) {
+                $skippedPos++;
+                $errors[] = "Group {$groupKey}: Could not resolve or create vendor '{$poData['vendor_name']}'.";
+                continue;
+            }
+
+            // B. Calculate Financial Totals
+            $subtotal = 0.0;
+            $totalGst = 0.0;
+
+            foreach ($poData['items'] as &$item) {
+                $lineSubtotal = $item['quantity'] * $item['price'];
+                $lineGst = $lineSubtotal * ($item['gst'] / 100.0);
+                $lineAmount = $lineSubtotal + $lineGst;
+
+                $item['amount'] = $lineAmount;
+                $subtotal += $lineSubtotal;
+                $totalGst += $lineGst;
+            }
+            unset($item);
+
+            $shippingCost = $poData['shipping_cost'];
+            $totalCost = $subtotal + $totalGst + $shippingCost;
+
+            // C. Insert Purchase Order Header
+            $finalPoNumber = $poData['po_number'];
+            $poId = 0;
+
+            if ($finalPoNumber !== '') {
+                // Check if po_number already exists
+                $chkStmt = $this->db->prepare("SELECT id FROM purchase_orders WHERE po_number = ? LIMIT 1");
+                $chkStmt->bind_param("s", $finalPoNumber);
+                $chkStmt->execute();
+                $existingRes = $chkStmt->get_result()->fetch_assoc();
+                
+                if (!empty($existingRes['id'])) {
+                    // Update existing PO header or append items
+                    $poId = (int)$existingRes['id'];
+                }
+            }
+
+            if ($poId === 0) {
+                $insSql = "INSERT INTO purchase_orders 
+                    (po_number, po_type, vendor_id, user_id, po_date, expected_delivery_date, delivery_address, notes, terms_and_conditions, subtotal, total_gst, shipping_cost, total_cost, status) 
+                    VALUES (?, 'stock', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                
+                $dummyPoNum = $finalPoNumber !== '' ? $finalPoNumber : 'TEMP-' . uniqid();
+                $expectedDate = $poData['expected_delivery_date'] !== '' ? $poData['expected_delivery_date'] : null;
+
+                $insStmt = $this->db->prepare($insSql);
+                $insStmt->bind_param(
+                    "siissssdddds",
+                    $dummyPoNum,
+                    $vendorId,
+                    $currentUserId,
+                    $poData['po_date'],
+                    $expectedDate,
+                    $poData['delivery_address'],
+                    $poData['notes'],
+                    $poData['terms_and_conditions'],
+                    $subtotal,
+                    $totalGst,
+                    $shippingCost,
+                    $totalCost,
+                    $poData['status']
+                );
+
+                if (!$insStmt->execute()) {
+                    $skippedPos++;
+                    $errors[] = "Group {$groupKey}: Failed to insert purchase order header ({$this->db->error}).";
+                    continue;
+                }
+
+                $poId = (int)$this->db->insert_id;
+
+                // Auto-generate PO number if not provided
+                if ($finalPoNumber === '') {
+                    $finalPoNumber = 'PO-' . date('Y') . '-' . str_pad($poId, 6, '0', STR_PAD_LEFT);
+                    $updPoNo = $this->db->prepare("UPDATE purchase_orders SET po_number = ? WHERE id = ?");
+                    $updPoNo->bind_param("si", $finalPoNumber, $poId);
+                    $updPoNo->execute();
+                }
+            }
+
+            // D. Insert PO Items
+            $itemsInsertedCount = 0;
+            $insItemStmt = $this->db->prepare("INSERT INTO vp_po_items 
+                (purchase_orders_id, order_number, title, image, hsn, gst, quantity, price, amount, item_code, size, color, sku) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
+            foreach ($poData['items'] as $it) {
+                $insItemStmt->bind_param(
+                    "iisssidddssss",
+                    $poId,
+                    $it['order_number'],
+                    $it['title'],
+                    $it['image'],
+                    $it['hsn'],
+                    $it['gst'],
+                    $it['quantity'],
+                    $it['price'],
+                    $it['amount'],
+                    $it['item_code'],
+                    $it['size'],
+                    $it['color'],
+                    $it['sku']
+                );
+
+                if ($insItemStmt->execute()) {
+                    $itemsInsertedCount++;
+                }
+            }
+
+            $totalPosImported++;
+            $totalItemsImported += $itemsInsertedCount;
+
+            $importedDetails[] = [
+                'po_id' => $poId,
+                'po_number' => $finalPoNumber,
+                'vendor_id' => $vendorId,
+                'vendor_name' => $poData['vendor_name'],
+                'items_count' => $itemsInsertedCount,
+                'total_cost' => $totalCost,
+                'status' => $poData['status']
+            ];
+        }
+
+        return [
+            'success' => $totalPosImported > 0,
+            'message' => $totalPosImported > 0 
+                ? "Successfully imported {$totalPosImported} purchase order(s) with {$totalItemsImported} line item(s)."
+                : "No purchase orders could be imported.",
+            'imported_pos' => $totalPosImported,
+            'imported_items' => $totalItemsImported,
+            'skipped_pos' => $skippedPos,
+            'errors' => $errors,
+            'details' => $importedDetails
+        ];
+    }
+
+    /**
+     * Normalize column names from CSV/Excel headers.
+     */
+    private function normalizeImportColumnName(string $col): string {
+        $clean = strtolower(trim($col));
+        $clean = str_replace([' ', '-', '_', '.', '#'], '_', $clean);
+        $clean = preg_replace('/_+/', '_', $clean);
+
+        $mapping = [
+            'vendor_code' => 'vendor_code',
+            'vendor_id' => 'vendor_code',
+            'supplier_code' => 'vendor_code',
+            'supplier_id' => 'vendor_code',
+            'v_code' => 'vendor_code',
+            'vcode' => 'vendor_code',
+            'po_num' => 'po_number',
+            'po_no' => 'po_number',
+            'ponumber' => 'po_number',
+            'purchase_order_number' => 'po_number',
+            'purchase_order_no' => 'po_number',
+            'vendor' => 'vendor_name',
+            'supplier' => 'vendor_name',
+            'vendor_title' => 'vendor_name',
+            'supplier_name' => 'vendor_name',
+            'order_date' => 'po_date',
+            'date' => 'po_date',
+            'delivery_due_date' => 'expected_delivery_date',
+            'due_date' => 'expected_delivery_date',
+            'delivery_date' => 'expected_delivery_date',
+            'expected_date' => 'expected_delivery_date',
+            'item' => 'item_code',
+            'item_no' => 'item_code',
+            'product_code' => 'item_code',
+            'sku_code' => 'sku',
+            'item_title' => 'title',
+            'product_name' => 'title',
+            'item_name' => 'title',
+            'description' => 'title',
+            'qty' => 'quantity',
+            'count' => 'quantity',
+            'rate' => 'price',
+            'unit_price' => 'price',
+            'cost' => 'price',
+            'price_per_unit' => 'price',
+            'tax' => 'gst',
+            'gst_rate' => 'gst',
+            'gst_percent' => 'gst',
+            'tax_percent' => 'gst',
+            'shipping' => 'shipping_cost',
+            'freight' => 'shipping_cost',
+            'terms' => 'terms_and_conditions',
+            'address' => 'delivery_address',
+            'warehouse_code' => 'delivery_address',
+            'warehouse' => 'delivery_address',
+            'wh_code' => 'delivery_address',
+            'wh' => 'delivery_address',
+            'location_code' => 'delivery_address',
+            'warehouse_id' => 'delivery_address'
+        ];
+
+        return $mapping[$clean] ?? $clean;
+    }
+
+    /**
+     * Parse date string into YYYY-MM-DD.
+     */
+    private function parseImportDate(string $rawDate): string {
+        $rawDate = trim($rawDate);
+        if ($rawDate === '') {
+            return '';
+        }
+
+        // Try standard formats
+        $time = strtotime($rawDate);
+        if ($time !== false && $time > 0) {
+            return date('Y-m-d', $time);
+        }
+
+        // Try DD/MM/YYYY or DD-MM-YYYY
+        if (preg_match('/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/', $rawDate, $m)) {
+            return sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+        }
+
+        return '';
+    }
+
+    /**
+     * Normalize status string to allowed PO status.
+     */
+    private function normalizePoStatus(string $statusStr): string {
+        $statusStr = strtolower(trim($statusStr));
+        $allowed = ['pending', 'ordered', 'received', 'completed', 'draft', 'cancelled'];
+        
+        if (in_array($statusStr, $allowed)) {
+            return $statusStr;
+        }
+
+        if (in_array($statusStr, ['approved', 'open', 'active'])) {
+            return 'ordered';
+        }
+        if (in_array($statusStr, ['done', 'delivered', 'inbound', 'closed'])) {
+            return 'received';
+        }
+
+        return 'pending';
+    }
+
+    /**
+     * Helper to find or create vendor in database during import.
+     */
+    private function resolveVendorForImport(string &$vendorName, string $vendorCode = '', int $userId = 0): int {
+        $vendorName = trim($vendorName);
+        $vendorCode = trim($vendorCode);
+
+        // 1. Try lookup by Vendor Code / Vendor ID
+        if ($vendorCode !== '') {
+            $stmt = $this->db->prepare("SELECT id, vendor_name FROM vp_vendors WHERE vendor_code = ? OR vendor_id = ? OR CAST(id AS CHAR) = ? LIMIT 1");
+            $stmt->bind_param("sss", $vendorCode, $vendorCode, $vendorCode);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            if (!empty($row['id'])) {
+                if ($vendorName === '' && !empty($row['vendor_name'])) {
+                    $vendorName = $row['vendor_name'];
+                }
+                return (int)$row['id'];
+            }
+        }
+
+        // 2. Try lookup by Vendor Name
+        if ($vendorName !== '') {
+            $stmt = $this->db->prepare("SELECT id FROM vp_vendors WHERE LOWER(TRIM(vendor_name)) = LOWER(TRIM(?)) LIMIT 1");
+            $stmt->bind_param("s", $vendorName);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            if (!empty($row['id'])) {
+                return (int)$row['id'];
+            }
+        }
+
+        // 3. Create new vendor if vendorCode or vendorName is provided
+        if ($vendorCode !== '' || $vendorName !== '') {
+            $nameToUse = $vendorName !== '' ? $vendorName : 'Vendor ' . $vendorCode;
+            $codeToUse = $vendorCode !== '' ? $vendorCode : 'VEND-' . strtoupper(substr(preg_replace('/[^a-z0-9]/i', '', $nameToUse), 0, 6));
+
+            $ins = $this->db->prepare("INSERT INTO vp_vendors (vendor_code, vendor_name, user_id, is_active, groupname, country) VALUES (?, ?, ?, 'active', 'Imported', 'India')");
+            $ins->bind_param("ssi", $codeToUse, $nameToUse, $userId);
+            if ($ins->execute()) {
+                if ($vendorName === '') {
+                    $vendorName = $nameToUse;
+                }
+                return (int)$this->db->insert_id;
+            }
+        }
+
+        // 4. Fallback to default active vendor
+        $res = $this->db->query("SELECT id, vendor_name FROM vp_vendors WHERE is_active = 'active' OR is_active = 1 ORDER BY id ASC LIMIT 1");
+        if ($row = $res->fetch_assoc()) {
+            if ($vendorName === '' && !empty($row['vendor_name'])) {
+                $vendorName = $row['vendor_name'];
+            }
+            return (int)$row['id'];
+        }
+
+        return 1;
+    }
+
     public function cancelPurchaseOrder($id) {
         $sql = "UPDATE purchase_orders SET status = 'cancelled' WHERE id = ?";
         $stmt = $this->db->prepare($sql);
