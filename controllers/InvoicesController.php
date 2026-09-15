@@ -2432,6 +2432,28 @@ class InvoicesController
 
         $orderLines = array_values($expandedOrderLinesMap);
 
+        // Fetch active (non-cancelled) invoice status map for order lines
+        $existingInvIds = [];
+        foreach ($orderLines as $row) {
+            $invId = (int)($row['invoice_id'] ?? 0);
+            if ($invId > 0) {
+                $existingInvIds[$invId] = true;
+            }
+        }
+
+        $activeInvoiceMap = [];
+        if (!empty($existingInvIds)) {
+            $invIdList = implode(',', array_map('intval', array_keys($existingInvIds)));
+            $invRes = $conn->query("SELECT id, status FROM vp_invoices WHERE id IN ({$invIdList})");
+            if ($invRes) {
+                while ($invRow = $invRes->fetch_assoc()) {
+                    if (strtolower(trim((string)($invRow['status'] ?? ''))) !== 'cancelled') {
+                        $activeInvoiceMap[(int)$invRow['id']] = true;
+                    }
+                }
+            }
+        }
+
         // Group items by customer_id
         $customerGroups = [];
         $totalOrdersSet = [];
@@ -2440,9 +2462,8 @@ class InvoicesController
         foreach ($orderLines as $row) {
             // Check for existing active non-cancelled invoice
             $invId = (int)($row['invoice_id'] ?? 0);
-            $invStat = strtolower(trim((string)($row['invoice_status'] ?? '')));
-            if ($invId > 0 && $invStat !== 'cancelled') {
-                continue; // Skip items already invoiced
+            if ($invId > 0 && !empty($activeInvoiceMap[$invId])) {
+                continue; // Skip items already having an active (non-cancelled) invoice
             }
 
             $customerId = (int)($row['customer_id'] ?? 0);
