@@ -2848,5 +2848,185 @@ class InvoicesController
         ]);
         exit;
     }
+
+    /**
+     * Render Bulk Invoice Batches List View
+     */
+    public function batch_list(): void
+    {
+        is_login();
+        global $conn;
+
+        $page = isset($_GET['page_no']) ? max(1, (int)$_GET['page_no']) : 1;
+        $limit = isset($_GET['limit']) ? max(5, min(100, (int)$_GET['limit'])) : 20;
+        $offset = ($page - 1) * $limit;
+
+        $filters = [
+            'batch_no' => trim((string)($_GET['batch_no'] ?? '')),
+            'status' => trim((string)($_GET['status'] ?? '')),
+            'date' => trim((string)($_GET['date'] ?? '')),
+        ];
+
+        require_once __DIR__ . '/../models/invoice/BulkInvoiceBatch.php';
+        $bulkBatchModel = new BulkInvoiceBatch($conn);
+
+        $batches = $bulkBatchModel->getBatchesList($limit, $offset, $filters);
+        $totalBatches = $bulkBatchModel->countBatchesList($filters);
+        $totalPages = (int)ceil($totalBatches / $limit);
+
+        renderTemplate('views/invoices/batch_list.php', [
+            'batches' => $batches,
+            'page' => $page,
+            'limit' => $limit,
+            'totalBatches' => $totalBatches,
+            'totalPages' => $totalPages,
+            'filters' => $filters,
+        ]);
+    }
+
+    /**
+     * AJAX endpoint to cancel all created invoices for a batch (or selected items).
+     */
+    public function cancel_batch_invoices(): void
+    {
+        is_login();
+        global $conn;
+
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (!canSrEmpAccess()) {
+            echo json_encode(['success' => false, 'message' => 'Access denied. Administrator or Sr Emp access required.']);
+            exit;
+        }
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        $batchId = (int)($input['batch_id'] ?? $_POST['batch_id'] ?? $_GET['batch_id'] ?? 0);
+
+        if ($batchId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid batch ID']);
+            exit;
+        }
+
+        require_once __DIR__ . '/../models/invoice/BulkInvoiceBatch.php';
+        require_once __DIR__ . '/../helpers/order_cancel_invoice.php';
+
+        $bulkBatchModel = new BulkInvoiceBatch($conn);
+        $batch = $bulkBatchModel->getBatchById($batchId);
+        if (!$batch) {
+            echo json_encode(['success' => false, 'message' => 'Batch not found']);
+            exit;
+        }
+
+        $items = $bulkBatchModel->getBatchItems($batchId);
+        $cancelledCount = 0;
+        $failedCount = 0;
+        $messages = [];
+
+        foreach ($items as $item) {
+            $invId = (int)($item['invoice_id'] ?? 0);
+            if ($invId > 0 && $item['status'] === 'completed') {
+                $cancelRes = order_cancel_vp_invoice_by_id($conn, $invId);
+                if (!empty($cancelRes['success'])) {
+                    $cancelledCount++;
+                    $stmt = $conn->prepare("UPDATE vp_invoice_bulk_batch_items SET status = 'failed', error_message = 'Invoice cancelled by user' WHERE id = ?");
+                    if ($stmt) {
+                        $stmt->bind_param("i", $item['id']);
+                        $stmt->execute();
+                        $stmt->close();
+                    }
+                } else {
+                    $failedCount++;
+                    $messages[] = "Invoice #" . ($item['invoice_number'] ?: $invId) . ": " . ($cancelRes['message'] ?? 'Cancellation failed');
+                }
+            }
+        }
+
+        $bulkBatchModel->updateBatchTotals($batchId);
+
+        echo json_encode([
+            'success' => true,
+            'cancelled_count' => $cancelledCount,
+            'failed_count' => $failedCount,
+            'message' => "Successfully cancelled {$cancelledCount} invoice(s)." . ($failedCount > 0 ? " ({$failedCount} failed)" : ''),
+            'errors' => $messages,
+        ]);
+        exit;
+    }
+
+    /**
+     * Export Batch to Dispatch Excel (Shiprocket, Delhivery, BlueDart, Standard formats).
+     */
+    public function export_batch_dispatch_excel(): void
+    {
+        is_login();
+        global $conn, $ordersModel;
+
+        $batchId = (int)($_GET['batch_id'] ?? 0);
+        $format = strtolower(trim((string)($_GET['format'] ?? 'standard')));
+
+        if ($batchId <= 0) {
+            http_response_code(400);
+            exit('Invalid batch ID');
+        }
+
+        require_once __DIR__ . '/../models/invoice/BulkInvoiceBatch.php';
+        require_once __DIR__ . '/../helpers/dispatch/batch_dispatch_excel_export.php';
+
+        $bulkBatchModel = new BulkInvoiceBatch($conn);
+        $batch = $bulkBatchModel->getBatchById($batchId);
+        if (!$batch) {
+            http_response_code(404);
+            exit('Batch not found');
+        }
+
+        $exportRows = fetchBatchDispatchRows($conn, $batchId);
+        if (empty($exportRows)) {
+            http_response_code(404);
+            exit('No exportable order lines found for this batch.');
+        }
+
+        $batchNo = $batch['batch_no'] ?? (string)$batchId;
+
+        if ($format === 'delhivery') {
+            exportBatchToDelhiveryExcel($exportRows, 'delhivery_manifest_' . $batchNo . '.xlsx');
+        } elseif ($format === 'shiprocket') {
+            exportBatchToShiprocketExcel($exportRows, 'shiprocket_manifest_' . $batchNo . '.xlsx');
+        } elseif ($format === 'bluedart') {
+            $boxes = [];
+            foreach ($exportRows as $r) {
+                $boxes[] = [
+                    'order_number' => $r['order_number'],
+                    'customer_name' => $r['shipping_name'],
+                    'weight' => $r['weight'],
+                    'declared_value' => $r['invoice_total'],
+                    'invoice_number' => $r['invoice_number'],
+                    'product_type' => 'A_P',
+                    'courier_name' => 'Blue Dart Air',
+                    'box_no' => 1,
+                    'is_cod' => strtoupper($r['payment_mode']) === 'COD' ? 1 : 0,
+                    'length_cm' => 22,
+                    'width_cm' => 17,
+                    'height_cm' => 5,
+                ];
+            }
+            $orderInfoResolver = function(string $ordNo) use ($conn) {
+                global $ordersModel;
+                if (!isset($ordersModel)) {
+                    require_once __DIR__ . '/../models/order/order.php';
+                    $ordersModel = new Order($conn);
+                }
+                return $ordersModel->getRemarksByOrderNumber($ordNo);
+            };
+            $sheetsRes = bluedartBulkExcelPrepareSheets($boxes, $orderInfoResolver);
+            if (!empty($sheetsRes['success']) && !empty($sheetsRes['sheets'])) {
+                bluedartBulkExcelStreamDownload($sheetsRes['sheets'], 'bluedart_manifest_' . $batchNo . '.xlsx');
+            } else {
+                http_response_code(400);
+                exit($sheetsRes['message'] ?? 'Failed to prepare BlueDart Excel export.');
+            }
+        } else {
+            generateBulkDispatchExcel($exportRows, 'bulk_dispatch_' . $batchNo . '.xlsx');
+        }
+    }
 }
 

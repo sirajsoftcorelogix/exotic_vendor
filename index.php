@@ -779,6 +779,15 @@ switch ($page) {
             case 'retry_failed_batch_items':
                 $controller->retry_failed_batch_items();
                 break;
+            case 'batch_list':
+                $controller->batch_list();
+                break;
+            case 'cancel_batch_invoices':
+                $controller->cancel_batch_invoices();
+                break;
+            case 'export_batch_dispatch_excel':
+                $controller->export_batch_dispatch_excel();
+                break;
             case 'api_fetch_vouchers':
                 require_once 'controllers/OrdersAPIController.php';
                 $apiController = new OrdersAPIController($conn);

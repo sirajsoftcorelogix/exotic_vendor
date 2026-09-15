@@ -28,6 +28,8 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
             <div class="flex items-center gap-2 text-sm text-gray-500 mb-1">
                 <a href="<?= base_url('?page=orders&action=list') ?>" class="hover:text-amber-600">Orders</a>
                 <span>&rsaquo;</span>
+                <a href="<?= base_url('?page=invoices&action=batch_list') ?>" class="hover:text-amber-600">Bulk Batches</a>
+                <span>&rsaquo;</span>
                 <span class="font-medium text-gray-700">Bulk Invoice Report</span>
             </div>
             <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
@@ -39,18 +41,41 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
+            <!-- Export Excel Dropdown -->
+            <div class="relative inline-block text-left" x-data="{ open: false }" @click.away="open = false">
+                <button type="button" @click="open = !open" 
+                        class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold shadow-sm transition">
+                    <span>📥 Export Dispatch Excel</span>
+                    <span class="text-xs">▼</span>
+                </button>
+                <div x-show="open" class="origin-top-right absolute right-0 mt-1 w-52 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20 focus:outline-none" style="display: none;">
+                    <div class="py-1 text-xs text-left">
+                        <a href="<?= base_url('?page=invoices&action=export_batch_dispatch_excel&batch_id=' . $batchId . '&format=shiprocket') ?>" class="block px-4 py-2.5 text-gray-700 hover:bg-amber-50 hover:text-amber-900 font-semibold">📦 Shiprocket Manifest</a>
+                        <a href="<?= base_url('?page=invoices&action=export_batch_dispatch_excel&batch_id=' . $batchId . '&format=delhivery') ?>" class="block px-4 py-2.5 text-gray-700 hover:bg-emerald-50 hover:text-emerald-900 font-semibold">🚚 Delhivery Manifest</a>
+                        <a href="<?= base_url('?page=invoices&action=export_batch_dispatch_excel&batch_id=' . $batchId . '&format=bluedart') ?>" class="block px-4 py-2.5 text-gray-700 hover:bg-sky-50 hover:text-sky-900 font-semibold">✈️ BlueDart Manifest</a>
+                        <a href="<?= base_url('?page=invoices&action=export_batch_dispatch_excel&batch_id=' . $batchId . '&format=standard') ?>" class="block px-4 py-2.5 text-gray-700 hover:bg-gray-100 font-semibold border-t border-gray-100">📄 Standard Manifest (.xlsx)</a>
+                    </div>
+                </div>
+            </div>
+
             <a href="<?= base_url('?page=invoices&action=export_batch_csv&batch_id=' . $batchId) ?>" 
                class="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-sm transition">
                 <span>📄</span> Export CSV
             </a>
             <a href="<?= base_url('?page=invoices&action=download_batch_zip&batch_id=' . $batchId) ?>" 
                class="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-sm transition">
-                <span>📥</span> Download Invoices (ZIP)
+                <span>📥</span> Download PDFs (ZIP)
             </a>
             <a href="<?= base_url('?page=dispatch&action=bulk_dispatch&invoice_batch_id=' . $batchId) ?>" 
                class="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-bold shadow-sm transition">
-                <span>🚚</span> Proceed to Bulk Dispatch &amp; Labels
+                <span>🚚</span> Proceed to Bulk Dispatch
             </a>
+            <?php if ($succCount > 0 && $status !== 'failed'): ?>
+                <button type="button" onclick="cancelBatchInvoices(<?= $batchId ?>, '<?= $batchNo ?>')" 
+                        class="inline-flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg text-sm font-bold shadow-sm transition">
+                    <span>❌</span> Cancel Invoices
+                </button>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -114,13 +139,12 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
                         <th class="px-6 py-3">Invoice Number</th>
                         <th class="px-6 py-3 text-right">Invoice Amount</th>
                         <th class="px-6 py-3">Details / Errors</th>
-                        <th class="px-6 py-3 text-center">Action</th>
                     </tr>
                 </thead>
                 <tbody id="batchItemsBody" class="divide-y divide-gray-200 bg-white">
                     <?php if (empty($items)): ?>
                         <tr>
-                            <td colspan="7" class="px-6 py-8 text-center text-gray-500">No items found for this batch job.</td>
+                            <td colspan="6" class="px-6 py-8 text-center text-gray-500">No items found for this batch job.</td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($items as $row): 
@@ -160,8 +184,17 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
                                         <?= strtoupper($itemStat) ?>
                                     </span>
                                 </td>
-                                <td class="px-6 py-4 font-mono font-bold text-indigo-600">
-                                    <?= $invNo !== '' ? $invNo : '-' ?>
+                                <td class="px-6 py-4 font-mono font-bold">
+                                    <?php if ($invId > 0 && $invNo !== ''): ?>
+                                        <a href="<?= base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invId) ?>" 
+                                           target="_blank" rel="noopener noreferrer" 
+                                           class="text-amber-600 hover:text-amber-700 hover:underline font-mono font-bold inline-flex items-center gap-1"
+                                           title="Click to download invoice PDF">
+                                            <span>📄</span> <?= $invNo ?>
+                                        </a>
+                                    <?php else: ?>
+                                        <span class="text-gray-400 font-normal">-</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="px-6 py-4 text-right font-semibold text-gray-900">
                                     <?= (float)($row['invoice_amount'] ?? 0) > 0 ? ('₹' . number_format((float)$row['invoice_amount'], 2)) : '-' ?>
@@ -172,22 +205,11 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
                                             ❌ <?= htmlspecialchars($row['error_message']) ?>
                                         </span>
                                     <?php elseif ($itemStat === 'completed'): ?>
-                                        <span class="text-green-600">✓ Invoice created successfully</span>
+                                        <span class="text-green-600 font-medium">✓ Invoice created successfully</span>
                                     <?php elseif ($itemStat === 'processing'): ?>
                                         <span class="text-blue-600 font-semibold animate-pulse">⏳ Processing invoice...</span>
                                     <?php else: ?>
                                         <span class="text-gray-400">Queued for background worker</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="px-6 py-4 text-center">
-                                    <?php if ($invId > 0): ?>
-                                        <a href="<?= base_url('?page=invoices&action=generate_pdf&invoice_id=' . $invId) ?>" 
-                                           target="_blank" rel="noopener noreferrer"
-                                           class="inline-flex items-center gap-1 text-xs font-bold text-amber-600 hover:text-amber-700 underline">
-                                            📄 View PDF
-                                        </a>
-                                    <?php else: ?>
-                                        <span class="text-gray-400 text-xs">-</span>
                                     <?php endif; ?>
                                 </td>
                             </tr>
@@ -199,6 +221,7 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 <script>
 (function() {
     const batchId = <?= $batchId ?>;
@@ -325,19 +348,19 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
                 if (itemStat === 'processing') {
                     statusDetail = '<span class="text-blue-600 font-semibold animate-pulse">⏳ Processing invoice...</span>';
                 } else if (itemStat === 'completed') {
-                    statusDetail = '<span class="text-green-600">✓ Invoice created successfully</span>';
+                    statusDetail = '<span class="text-green-600 font-medium">✓ Invoice created successfully</span>';
                 } else if (row.error_message) {
                     statusDetail = `<span class="text-red-600 font-semibold" title="${escapeHtml(row.error_message)}">❌ ${escapeHtml(row.error_message)}</span>`;
                 }
 
-                let actionHtml = '<span class="text-gray-400 text-xs">-</span>';
-                if (invId > 0) {
-                    actionHtml = `<a href="index.php?page=invoices&action=generate_pdf&invoice_id=${invId}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-xs font-bold text-amber-600 hover:text-amber-700 underline">📄 View PDF</a>`;
+                let invoiceCell = '<span class="text-gray-400 font-normal">-</span>';
+                if (invId > 0 && invNo !== '') {
+                    invoiceCell = `<a href="index.php?page=invoices&action=generate_pdf&invoice_id=${invId}" target="_blank" rel="noopener noreferrer" class="text-amber-600 hover:text-amber-700 hover:underline font-mono font-bold inline-flex items-center gap-1" title="Click to download invoice PDF"><span>📄</span> ${invNo}</a>`;
                 }
 
                 html += `<tr id="batch-item-row-${row.id}" class="hover:bg-gray-50">
                     <td class="px-6 py-4 font-semibold text-gray-900">
-                        ${escapeHtml(row.customer_name || ('Customer #' + row.customer_id))}
+                        ${escapeHtml(row.customer_name || ('Customer #' . row.customer_id))}
                         <span class="block text-xs font-normal text-gray-400">ID: #${row.customer_id}</span>
                     </td>
                     <td class="px-6 py-4 text-gray-700 text-xs">
@@ -348,8 +371,8 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
                             ${itemStat.toUpperCase()}
                         </span>
                     </td>
-                    <td class="px-6 py-4 font-mono font-bold text-indigo-600">
-                        ${invNo !== '' ? invNo : '-'}
+                    <td class="px-6 py-4 font-mono font-bold">
+                        ${invoiceCell}
                     </td>
                     <td class="px-6 py-4 text-right font-semibold text-gray-900">
                         ${amount > 0 ? ('₹' + amount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})) : '-'}
@@ -357,14 +380,36 @@ $badgeClass = $statusBadges[$status] ?? $statusBadges['pending'];
                     <td class="px-6 py-4 text-xs text-gray-600 max-w-xs truncate">
                         ${statusDetail}
                     </td>
-                    <td class="px-6 py-4 text-center">
-                        ${actionHtml}
-                    </td>
                 </tr>`;
             });
             tbody.innerHTML = html;
         }
     }
+
+    window.cancelBatchInvoices = function(batchId, batchNo) {
+        if (!confirm(`Are you sure you want to CANCEL ALL generated invoices in Batch #${batchNo}?\n\nThis will restore stock and mark all invoices in this batch as cancelled.`)) {
+            return;
+        }
+
+        fetch('index.php?page=invoices&action=cancel_batch_invoices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ batch_id: batchId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message || 'Batch invoices cancelled successfully.');
+                window.location.reload();
+            } else {
+                alert('Cancellation failed: ' + (data.message || 'Unknown error'));
+            }
+        })
+        .catch(err => {
+            console.error('Cancel batch error:', err);
+            alert('Network error while cancelling batch invoices.');
+        });
+    };
 
     window.retryFailedItems = function() {
         if (!confirm('Re-queue all failed invoice items in this batch?')) return;
