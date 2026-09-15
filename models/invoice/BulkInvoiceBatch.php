@@ -144,11 +144,12 @@ class BulkInvoiceBatch
     }
 
     /**
-     * Get next pending item for processing. Lock/reserve it to prevent concurrent worker duplication.
+     * Get next pending item for processing (or retry stuck item).
+     * Locks/reserves it to prevent concurrent worker duplication.
      */
     public function lockNextPendingItem(int $batchId = 0): ?array
     {
-        $where = "status = 'pending'";
+        $where = "(status = 'pending' OR (status = 'processing' AND processed_at IS NOT NULL AND processed_at < NOW() - INTERVAL 2 MINUTE))";
         $types = "";
         $params = [];
 
@@ -173,17 +174,12 @@ class BulkInvoiceBatch
         $stmt->close();
 
         if ($row) {
-            // Mark item as processing
-            $up = $this->db->prepare("UPDATE vp_invoice_bulk_batch_items SET status = 'processing' WHERE id = ? AND status = 'pending'");
+            // Mark item as processing with current processed_at timestamp
+            $up = $this->db->prepare("UPDATE vp_invoice_bulk_batch_items SET status = 'processing', processed_at = NOW() WHERE id = ?");
             if ($up) {
                 $up->bind_param("i", $row['id']);
                 $up->execute();
-                $affected = $up->affected_rows;
                 $up->close();
-                if ($affected === 0) {
-                    // Race condition hit: item was already taken
-                    return null;
-                }
             }
 
             // Also mark main batch as processing & record start time if pending
@@ -197,6 +193,111 @@ class BulkInvoiceBatch
         }
 
         return $row ?: null;
+    }
+
+    /**
+     * Execute invoice creation for a single batch item.
+     */
+    public function processItem(array $item, $creationService, $ordersModel): array
+    {
+        $itemId = (int)$item['id'];
+        $batchId = (int)$item['batch_id'];
+        $customerId = (int)$item['customer_id'];
+        $orderItemIds = json_decode((string)($item['order_item_ids'] ?? '[]'), true);
+
+        if (!is_array($orderItemIds) || empty($orderItemIds)) {
+            $this->markItemFailed($itemId, "No order item IDs provided for customer #{$customerId}");
+            return ['success' => false, 'item_id' => $itemId, 'message' => "No order item IDs provided"];
+        }
+
+        try {
+            $orderLines = $ordersModel->getOrdersByIds($orderItemIds);
+            if (empty($orderLines)) {
+                $this->markItemFailed($itemId, "Order lines not found for IDs: " . implode(', ', $orderItemIds));
+                return ['success' => false, 'item_id' => $itemId, 'message' => "Order lines not found"];
+            }
+
+            $batchHeader = $this->getBatchById($batchId);
+            $batchNo = $batchHeader ? (string)$batchHeader['batch_no'] : '';
+
+            $firstOrderNo = (string)($orderLines[0]['order_number'] ?? '');
+            $orderInfo = $ordersModel->getRemarksByOrderNumber($firstOrderNo);
+
+            // Update customer_name in item row if generic or empty
+            if (empty($item['customer_name']) || strpos($item['customer_name'], 'Customer #') === 0) {
+                if (is_array($orderInfo)) {
+                    $fullName = trim(($orderInfo['first_name'] ?? '') . ' ' . ($orderInfo['last_name'] ?? ''));
+                    if ($fullName !== '') {
+                        $upName = $this->db->prepare("UPDATE vp_invoice_bulk_batch_items SET customer_name = ? WHERE id = ?");
+                        if ($upName) {
+                            $upName->bind_param("si", $fullName, $itemId);
+                            $upName->execute();
+                            $upName->close();
+                        }
+                    }
+                }
+            }
+
+            require_once __DIR__ . '/../../helpers/app_settings.php';
+            require_once __DIR__ . '/../../helpers/invoice/invoice_gst.php';
+            $useIgst = invoice_order_info_uses_igst(is_array($orderInfo) ? $orderInfo : null, app_setting_firm_details());
+            $vpOrderInfoId = (is_array($orderInfo) && isset($orderInfo['id'])) ? (int)$orderInfo['id'] : 0;
+
+            $headerOverrides = [
+                'customer_id' => $customerId,
+                'vp_order_info_id' => $vpOrderInfoId,
+                'batch_no' => $batchNo,
+                'created_by' => (int)($batchHeader['created_by'] ?? 0),
+            ];
+
+            require_once __DIR__ . '/../../helpers/invoice/InvoiceRequestBuilder.php';
+            $request = InvoiceRequestBuilder::fromOrderLines(
+                $orderLines,
+                $headerOverrides,
+                [
+                    'source' => 'bulk_background',
+                    'use_igst' => $useIgst,
+                    'duplicate_order_check' => true,
+                    'update_order_invoice_id' => true
+                ]
+            );
+
+            $res = $creationService->create($request);
+
+            if (!empty($res['success']) && !empty($res['invoice_id'])) {
+                $invoiceId = (int)$res['invoice_id'];
+                $invoiceNumber = (string)($res['invoice_number'] ?? '');
+                $amount = (float)($res['total_amount'] ?? $request['header']['total_amount'] ?? 0.0);
+
+                $this->markItemCompleted($itemId, $invoiceId, $invoiceNumber, $amount);
+                return [
+                    'success' => true,
+                    'item_id' => $itemId,
+                    'invoice_id' => $invoiceId,
+                    'invoice_number' => $invoiceNumber,
+                    'amount' => $amount
+                ];
+            } else {
+                $errMsg = (string)($res['message'] ?? 'Invoice creation failed with unknown error.');
+                $this->markItemFailed($itemId, $errMsg);
+                return ['success' => false, 'item_id' => $itemId, 'message' => $errMsg];
+            }
+        } catch (Throwable $e) {
+            $this->markItemFailed($itemId, $e->getMessage());
+            return ['success' => false, 'item_id' => $itemId, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Lock and process the next pending item for a given batch.
+     */
+    public function processNextPendingItem(int $batchId, $creationService, $ordersModel): ?array
+    {
+        $item = $this->lockNextPendingItem($batchId);
+        if (!$item) {
+            return null;
+        }
+        return $this->processItem($item, $creationService, $ordersModel);
     }
 
     public function markItemCompleted(int $itemId, int $invoiceId, string $invoiceNumber, float $amount = 0.00): void
