@@ -3129,16 +3129,36 @@ class PosInvoiceController
     {
         global $commanModel, $invoiceModel, $conn, $ordersModel;
 
-        $orderNumberForRepair = '';
-        if (!empty($items[0]['order_number'])) {
-            $orderNumberForRepair = trim((string)$items[0]['order_number']);
+        $orderNumbersForInvoice = [];
+        foreach ($items as $it) {
+            $ono = trim((string)($it['order_number'] ?? ''));
+            if ($ono !== '' && !in_array($ono, $orderNumbersForInvoice, true)) {
+                $orderNumbersForInvoice[] = $ono;
+            }
         }
+
         $orderLines = [];
         $orderInfo = null;
         $pricingMapForPdf = [];
-        if ($orderNumberForRepair !== '' && isset($ordersModel)) {
-            $orderLines = $ordersModel->getOrderByOrderNumber($orderNumberForRepair);
-            $orderInfo = $ordersModel->getAddressInfoByOrderNumber($orderNumberForRepair);
+        $primaryOrderNo = $orderNumbersForInvoice[0] ?? '';
+
+        if (!empty($orderNumbersForInvoice) && isset($ordersModel)) {
+            foreach ($orderNumbersForInvoice as $ono) {
+                $lines = $ordersModel->getOrderByOrderNumber($ono);
+                if (is_array($lines)) {
+                    foreach ($lines as $line) {
+                        $orderLines[] = $line;
+                    }
+                }
+            }
+
+            if (!empty($invoice['vp_order_info_id']) && isset($commanModel)) {
+                $orderInfo = $commanModel->getRecordById('vp_order_info', (int)$invoice['vp_order_info_id']);
+            }
+            if (!$orderInfo && $primaryOrderNo !== '') {
+                $orderInfo = $ordersModel->getAddressInfoByOrderNumber($primaryOrderNo);
+            }
+
             if ($orderLines !== []) {
                 require_once __DIR__ . '/../helpers/invoice/pos_order_pricing.php';
                 require_once __DIR__ . '/../helpers/invoice/pos_invoice_pdf_items.php';
@@ -3159,13 +3179,13 @@ class PosInvoiceController
         }
 
         $invoiceId = (int)($invoice['id'] ?? 0);
-        if ($invoiceId > 0 && $orderNumberForRepair !== '') {
+        if ($invoiceId > 0 && $primaryOrderNo !== '' && !empty($invoice['pos_flag'])) {
             $notesEmpty = trim((string)($invoice['notes'] ?? '')) === '';
             $lineMetaEmpty = empty($this->parsePosInvoiceLineItemsMeta($invoice['notes'] ?? null));
             $parsedDiscount = $this->parsePosInvoiceDiscountMeta($invoice['notes'] ?? null);
             $discountMetaEmpty = empty($parsedDiscount);
             $discountMetaStale = !$discountMetaEmpty
-                && $this->posInvoiceDiscountMetaNeedsRepair($parsedDiscount, $orderNumberForRepair);
+                && $this->posInvoiceDiscountMetaNeedsRepair($parsedDiscount, $primaryOrderNo);
             require_once __DIR__ . '/../helpers/invoice/pos_invoice_line_calculation.php';
             $lineMetaStale = !$lineMetaEmpty
                 && !empty($parsedDiscount)
@@ -3174,7 +3194,7 @@ class PosInvoiceController
                     $parsedDiscount
                 );
             if ($notesEmpty || $lineMetaEmpty || $discountMetaEmpty || $discountMetaStale || $lineMetaStale) {
-                if ($this->repairPosInvoiceMetadataForOrder($invoiceId, $orderNumberForRepair)) {
+                if ($this->repairPosInvoiceMetadataForOrder($invoiceId, $primaryOrderNo)) {
                     $reloaded = $invoiceModel->getInvoiceById($invoiceId);
                     if (is_array($reloaded)) {
                         $invoice = $reloaded;
@@ -3460,6 +3480,9 @@ class PosInvoiceController
             $summaryGrandTotal = round($sumLineTotals, 2);
         } elseif ($sumLineTotals > 0.001 && abs($sumLineTotals - $excelGrandTotal) <= 0.05) {
             $summaryGrandTotal = round($sumLineTotals, 2);
+        }
+        if (empty($invoice['pos_flag'])) {
+            $summaryGrandTotal = $sumLineTotals > 0.001 ? round($sumLineTotals, 2) : round((float)$totalAmount, 2);
         }
         $summaryTaxAmount = round($totalSgstAmt + $totalCgstAmt + $totalIgstAmt, 2);
         if ($showDiscPriceColumn && $summaryTaxAmount > 0.001) {
