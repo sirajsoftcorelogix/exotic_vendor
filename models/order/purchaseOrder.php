@@ -317,7 +317,7 @@ class PurchaseOrder {
 
                 $insStmt = $this->db->prepare($insSql);
                 $insStmt->bind_param(
-                    "siissssdddds",
+                    "siisssssdddds",
                     $dummyPoNum,
                     $vendorId,
                     $currentUserId,
@@ -358,7 +358,7 @@ class PurchaseOrder {
 
             foreach ($poData['items'] as $it) {
                 $insItemStmt->bind_param(
-                    "iisssidddssss",
+                    "isssddddssss",
                     $poId,
                     $it['order_number'],
                     $it['title'],
