@@ -292,31 +292,38 @@ function exportBatchToShiprocketExcel(array $exportRows, string $filename = 'shi
     ensure_vendor_autoloader();
 
     $headers = [
-        'Order ID',
-        'Order Date',
-        'Channel',
-        'Payment Method',
-        'Product Name',
-        'Product SKU',
-        'Quantity',
-        'Unit Price',
-        'Tax Rate (%)',
-        'Discount Amount',
-        'First Name',
-        'Last Name',
-        'Email',
-        'Phone',
-        'Address Line 1',
-        'Address Line 2',
-        'City',
-        'State',
-        'Pincode',
-        'Country',
-        'Package Weight (kg)',
-        'Package Length (cm)',
-        'Package Width (cm)',
-        'Package Height (cm)'
-    ];
+		'Order ID',
+		'Order Date',
+		'Channel',
+		'Payment Method',
+		// Customer/Billing fields from Excel matching your data
+		'Billing First Name',       // Maps to *CUSTOMER FIRST NAME
+		'Billing Last Name',        // Maps to *CUSTOMER LAST NAME
+		'Billing Email',            // Maps to *EMAIL
+		'Billing Phone',            // Maps to *CUSTOMER MOBILE
+		'Shipping Address Line 1',  // Maps to SHIPPING ADDRESS LINE 1
+		'Shipping Address Line 2',  // Maps to *SHIPPING ADDRESS LINE 2
+		'Shipping Country',         // Maps to *SHIPPING ADDRESS COUNTRY
+		'Shipping State',           // Maps to *SHIPPING ADDRESS STATE
+		'Shipping City',            // Maps to *SHIPPING ADDRESS CITY
+		'Shipping Pincode',         // Maps to *SHIPPING ADDRESS POSTCODE
+		'Billing Address Line 1',   // Maps to BILLING ADDRESS LINE 1
+		'Billing Address Line 2',   // Maps to BILLING ADDRESS LINE 2
+		'Billing Country',          // Maps to BILLING ADDRESS COUNTRY
+		'Billing State',            // Maps to BILLING ADDRESS STATE
+		'Billing City',             // Maps to BILLING ADDRESS CITY
+		'Billing Pincode',          // Maps to BILLING ADDRESS POSTCODE
+		'Product SKU',              // Maps to *MASTER SKU (Product SKU)
+		'Product Name',             // Maps to *PRODUCT NAME
+		'Quantity',                 // Maps to *PRODUCT QUANTITY
+		'Tax Rate (%)',             // Maps to TAX %
+		'Unit Price',               // Maps to *SELLING PRICE (PER UNIT ITEM, INCLUSIVE OF TAX)
+		'Discount Amount',          // Maps to DISCOUNT (PER UNIT ITEM)
+		'Package Length (cm)',      // Maps to *LENGTH (CM)
+		'Package Width (cm)',       // Maps to *BREADTH (CM)
+		'Package Height (cm)',      // Maps to *HEIGHT (CM)
+		'Package Weight (kg)'       // Maps to WEIGHT OF SHIPMENT (KG)
+	];
 
     if (!class_exists('\PhpOffice\PhpSpreadsheet\Spreadsheet')) {
         if (ob_get_length()) ob_end_clean();
@@ -334,22 +341,32 @@ function exportBatchToShiprocketExcel(array $exportRows, string $filename = 'shi
                 (string)($row['invoice_date'] ?? date('Y-m-d')),
                 'Custom',
                 $isCod ? 'COD' : 'Prepaid',
-                (string)($row['title'] ?? ''),
-                (string)($row['item_code'] ?? ''),
-                (int)($row['quantity'] ?? 1),
-                number_format((float)($row['unit_price'] ?? 0), 2, '.', ''),
-                number_format((float)($row['gst_rate'] ?? 0), 2, '.', ''),
-                '0.00',
-                (string)($row['shipping_first_name'] ?? ''),
+                (string)($row['shipping_first_name'] ?? $row['customer_name'] ?? ''),
                 (string)($row['shipping_last_name'] ?? ''),
-                (string)($row['email'] ?? ''),
-                (string)($row['phone'] ?? ''),
                 (string)($row['address1'] ?? ''),
                 (string)($row['address2'] ?? ''),
                 (string)($row['city'] ?? ''),
                 (string)($row['state'] ?? ''),
                 (string)($row['zipcode'] ?? ''),
                 (string)($row['country'] ?? 'India'),
+                (string)($row['email'] ?? ''),
+                (string)($row['phone'] ?? ''),
+                (string)($row['shipping_first_name'] ?? $row['customer_name'] ?? ''),
+                (string)($row['shipping_last_name'] ?? ''),
+                (string)($row['address1'] ?? ''),
+                (string)($row['address2'] ?? ''),
+                (string)($row['city'] ?? ''),
+                (string)($row['state'] ?? ''),
+                (string)($row['zipcode'] ?? ''),
+                (string)($row['country'] ?? 'India'),
+                (string)($row['email'] ?? ''),
+                (string)($row['phone'] ?? ''),
+                (string)($row['title'] ?? ''),
+                (string)($row['item_code'] ?? ''),
+                (int)($row['quantity'] ?? 1),
+                number_format((float)($row['unit_price'] ?? 0), 2, '.', ''),
+                number_format((float)($row['gst_rate'] ?? 0), 2, '.', ''),
+                '0.00',
                 '0.50',
                 '22',
                 '17',
@@ -386,22 +403,32 @@ function exportBatchToShiprocketExcel(array $exportRows, string $filename = 'shi
             (string)($row['invoice_date'] ?? date('Y-m-d')),
             'Custom',
             $isCod ? 'COD' : 'Prepaid',
-            (string)($row['title'] ?? ''),
-            (string)($row['item_code'] ?? ''),
-            (int)($row['quantity'] ?? 1),
-            number_format((float)($row['unit_price'] ?? 0), 2, '.', ''),
-            number_format((float)($row['gst_rate'] ?? 0), 2, '.', ''),
-            '0.00',
-            (string)($row['shipping_first_name'] ?? ''),
+            (string)($row['shipping_first_name'] ?? $row['customer_name'] ?? ''),
             (string)($row['shipping_last_name'] ?? ''),
-            (string)($row['email'] ?? ''),
-            (string)($row['phone'] ?? ''),
             (string)($row['address1'] ?? ''),
             (string)($row['address2'] ?? ''),
             (string)($row['city'] ?? ''),
             (string)($row['state'] ?? ''),
             (string)($row['zipcode'] ?? ''),
             (string)($row['country'] ?? 'India'),
+            (string)($row['email'] ?? ''),
+            (string)($row['phone'] ?? ''),
+            (string)($row['shipping_first_name'] ?? $row['customer_name'] ?? ''),
+            (string)($row['shipping_last_name'] ?? ''),
+            (string)($row['address1'] ?? ''),
+            (string)($row['address2'] ?? ''),
+            (string)($row['city'] ?? ''),
+            (string)($row['state'] ?? ''),
+            (string)($row['zipcode'] ?? ''),
+            (string)($row['country'] ?? 'India'),
+            (string)($row['email'] ?? ''),
+            (string)($row['phone'] ?? ''),
+            (string)($row['title'] ?? ''),
+            (string)($row['item_code'] ?? ''),
+            (int)($row['quantity'] ?? 1),
+            number_format((float)($row['unit_price'] ?? 0), 2, '.', ''),
+            number_format((float)($row['gst_rate'] ?? 0), 2, '.', ''),
+            '0.00',
             '0.50',
             '22',
             '17',
