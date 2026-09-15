@@ -2,10 +2,22 @@
 
 declare(strict_types=1);
 
-$vendorAutoload = dirname(__DIR__, 2) . '/vendor/autoload.php';
-if (file_exists($vendorAutoload)) {
-    require_once $vendorAutoload;
+function ensure_vendor_autoloader(): void
+{
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+
+    $autoloader = dirname(__DIR__, 2) . '/vendor/autoload.php';
+    if (file_exists($autoloader)) {
+        require_once $autoloader;
+        $loaded = true;
+    }
 }
+
+ensure_vendor_autoloader();
+
 require_once __DIR__ . '/bulk_dispatch_excel_export.php';
 require_once __DIR__ . '/bluedart_bulk_excel_export.php';
 
@@ -136,13 +148,7 @@ function fetchBatchDispatchRows(mysqli $conn, int $batchId): array
  */
 function exportBatchToDelhiveryExcel(array $exportRows, string $filename = 'delhivery_manifest.xlsx'): void
 {
-    if (ob_get_length()) {
-        ob_end_clean();
-    }
-
-    $spreadsheet = new Spreadsheet();
-    $sheet = $spreadsheet->getActiveSheet();
-    $sheet->setTitle('Delhivery Manifest');
+    ensure_vendor_autoloader();
 
     $headers = [
         'Waybill',
@@ -167,12 +173,60 @@ function exportBatchToDelhiveryExcel(array $exportRows, string $filename = 'delh
         'Invoice Date'
     ];
 
+    if (!class_exists('\PhpOffice\PhpSpreadsheet\Spreadsheet')) {
+        if (ob_get_length()) ob_end_clean();
+        $csvFilename = str_replace('.xlsx', '.csv', $filename);
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . rawurlencode($csvFilename) . '"');
+        $out = fopen('php://output', 'w');
+        fputcsv($out, $headers);
+
+        foreach ($exportRows as $row) {
+            $isCod = strtoupper((string)($row['payment_mode'] ?? '')) === 'COD';
+            $invTotal = (float)($row['invoice_total'] ?? $row['line_total'] ?? 0);
+            $codAmt = $isCod ? $invTotal : 0.00;
+
+            fputcsv($out, [
+                '',
+                (string)($row['order_number'] ?? ''),
+                (string)($row['shipping_name'] ?? ''),
+                (string)($row['address1'] ?? ''),
+                (string)($row['address2'] ?? ''),
+                (string)($row['city'] ?? ''),
+                (string)($row['state'] ?? ''),
+                (string)($row['zipcode'] ?? ''),
+                (string)($row['phone'] ?? ''),
+                $isCod ? 'COD' : 'Prepaid',
+                number_format($codAmt, 2, '.', ''),
+                number_format($invTotal, 2, '.', ''),
+                '500',
+                '22',
+                '17',
+                '5',
+                (string)($row['title'] ?? $row['item_code'] ?? ''),
+                (int)($row['quantity'] ?? 1),
+                (string)($row['invoice_number'] ?? ''),
+                (string)($row['invoice_date'] ?? date('Y-m-d')),
+            ]);
+        }
+        fclose($out);
+        exit;
+    }
+
+    if (ob_get_length()) {
+        ob_end_clean();
+    }
+
+    $spreadsheet = new Spreadsheet();
+    $sheet = $spreadsheet->getActiveSheet();
+    $sheet->setTitle('Delhivery Manifest');
+
     $colCount = count($headers);
     $headerRange = 'A1:' . Coordinate::stringFromColumnIndex($colCount) . '1';
     $sheet->fromArray([$headers], null, 'A1');
 
     $sheet->getStyle($headerRange)->getFont()->setBold(true)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFFFFF'));
-    $sheet->getStyle($headerRange)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FF047857'); // Emerald green
+    $sheet->getStyle($headerRange)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FF047857');
     $sheet->getStyle($headerRange)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
     $sheet->getRowDimension(1)->setRowHeight(28);
 
@@ -183,7 +237,7 @@ function exportBatchToDelhiveryExcel(array $exportRows, string $filename = 'delh
         $codAmt = $isCod ? $invTotal : 0.00;
 
         $data = [
-            '', // Waybill auto-generated
+            '',
             (string)($row['order_number'] ?? ''),
             (string)($row['shipping_name'] ?? ''),
             (string)($row['address1'] ?? ''),
@@ -195,10 +249,10 @@ function exportBatchToDelhiveryExcel(array $exportRows, string $filename = 'delh
             $isCod ? 'COD' : 'Prepaid',
             number_format($codAmt, 2, '.', ''),
             number_format($invTotal, 2, '.', ''),
-            '500', // Weight in grams
-            '22',  // Length cm
-            '17',  // Width cm
-            '5',   // Height cm
+            '500',
+            '22',
+            '17',
+            '5',
             (string)($row['title'] ?? $row['item_code'] ?? ''),
             (int)($row['quantity'] ?? 1),
             (string)($row['invoice_number'] ?? ''),
@@ -235,13 +289,7 @@ function exportBatchToDelhiveryExcel(array $exportRows, string $filename = 'delh
  */
 function exportBatchToShiprocketExcel(array $exportRows, string $filename = 'shiprocket_manifest.xlsx'): void
 {
-    if (ob_get_length()) {
-        ob_end_clean();
-    }
-
-    $spreadsheet = new Spreadsheet();
-    $sheet = $spreadsheet->getActiveSheet();
-    $sheet->setTitle('Shiprocket Import');
+    ensure_vendor_autoloader();
 
     $headers = [
         'Order ID',
@@ -270,12 +318,62 @@ function exportBatchToShiprocketExcel(array $exportRows, string $filename = 'shi
         'Package Height (cm)'
     ];
 
+    if (!class_exists('\PhpOffice\PhpSpreadsheet\Spreadsheet')) {
+        if (ob_get_length()) ob_end_clean();
+        $csvFilename = str_replace('.xlsx', '.csv', $filename);
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . rawurlencode($csvFilename) . '"');
+        $out = fopen('php://output', 'w');
+        fputcsv($out, $headers);
+
+        foreach ($exportRows as $row) {
+            $isCod = strtoupper((string)($row['payment_mode'] ?? '')) === 'COD';
+
+            fputcsv($out, [
+                (string)($row['order_number'] ?? ''),
+                (string)($row['invoice_date'] ?? date('Y-m-d')),
+                'Custom',
+                $isCod ? 'COD' : 'Prepaid',
+                (string)($row['title'] ?? ''),
+                (string)($row['item_code'] ?? ''),
+                (int)($row['quantity'] ?? 1),
+                number_format((float)($row['unit_price'] ?? 0), 2, '.', ''),
+                number_format((float)($row['gst_rate'] ?? 0), 2, '.', ''),
+                '0.00',
+                (string)($row['shipping_first_name'] ?? ''),
+                (string)($row['shipping_last_name'] ?? ''),
+                (string)($row['email'] ?? ''),
+                (string)($row['phone'] ?? ''),
+                (string)($row['address1'] ?? ''),
+                (string)($row['address2'] ?? ''),
+                (string)($row['city'] ?? ''),
+                (string)($row['state'] ?? ''),
+                (string)($row['zipcode'] ?? ''),
+                (string)($row['country'] ?? 'India'),
+                '0.50',
+                '22',
+                '17',
+                '5',
+            ]);
+        }
+        fclose($out);
+        exit;
+    }
+
+    if (ob_get_length()) {
+        ob_end_clean();
+    }
+
+    $spreadsheet = new Spreadsheet();
+    $sheet = $spreadsheet->getActiveSheet();
+    $sheet->setTitle('Shiprocket Import');
+
     $colCount = count($headers);
     $headerRange = 'A1:' . Coordinate::stringFromColumnIndex($colCount) . '1';
     $sheet->fromArray([$headers], null, 'A1');
 
     $sheet->getStyle($headerRange)->getFont()->setBold(true)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FFFFFF'));
-    $sheet->getStyle($headerRange)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFD97706'); // Amber/Orange
+    $sheet->getStyle($headerRange)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFD97706');
     $sheet->getStyle($headerRange)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
     $sheet->getRowDimension(1)->setRowHeight(28);
 

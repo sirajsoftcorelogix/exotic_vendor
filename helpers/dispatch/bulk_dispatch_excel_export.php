@@ -61,6 +61,51 @@ function bulkDispatchExcelColumnHeaders(): array
  */
 function generateBulkDispatchExcel(array $exportRows, string $filename = 'bulk_dispatch_manifest.xlsx'): void
 {
+    $headers = bulkDispatchExcelColumnHeaders();
+
+    if (!class_exists('\PhpOffice\PhpSpreadsheet\Spreadsheet')) {
+        if (ob_get_length()) ob_end_clean();
+        $csvFilename = str_replace('.xlsx', '.csv', $filename);
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . rawurlencode($csvFilename) . '"');
+        $out = fopen('php://output', 'w');
+        fputcsv($out, $headers);
+
+        foreach ($exportRows as $row) {
+            fputcsv($out, [
+                (string)($row['batch_no'] ?? ''),
+                (string)($row['order_number'] ?? ''),
+                (string)($row['invoice_number'] ?? ''),
+                (string)($row['invoice_date'] ?? date('Y-m-d')),
+                (string)($row['customer_id'] ?? ''),
+                (string)($row['customer_name'] ?? ''),
+                (string)($row['shipping_name'] ?? ''),
+                (string)($row['address1'] ?? ''),
+                (string)($row['address2'] ?? ''),
+                (string)($row['city'] ?? ''),
+                (string)($row['state'] ?? ''),
+                (string)($row['country'] ?? ''),
+                (string)($row['zipcode'] ?? ''),
+                (string)($row['phone'] ?? ''),
+                (string)($row['email'] ?? ''),
+                (string)($row['item_code'] ?? ''),
+                (string)($row['title'] ?? ''),
+                (int)($row['quantity'] ?? 1),
+                number_format((float)($row['unit_price'] ?? 0), 2, '.', ''),
+                number_format((float)($row['gst_rate'] ?? 0), 2, '.', ''),
+                number_format((float)($row['line_total'] ?? 0), 2, '.', ''),
+                (string)($row['payment_mode'] ?? 'Prepaid'),
+                (string)($row['box_no'] ?? '1'),
+                (string)($row['box_size'] ?? ''),
+                number_format((float)($row['weight'] ?? 0), 2, '.', ''),
+                (string)($row['dimensions'] ?? ''),
+                (string)($row['courier_company_id'] ?? $row['courier_name'] ?? ''),
+            ]);
+        }
+        fclose($out);
+        exit;
+    }
+
     if (ob_get_length()) {
         ob_end_clean();
     }
